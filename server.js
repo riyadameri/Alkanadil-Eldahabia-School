@@ -937,6 +937,10 @@ app.get('/api/teachers', authenticate(['admin', 'secretary']), async (req, res) 
 app.post('/api/teachers', authenticate(['admin']), async (req, res) => {
   try {
     const teacher = new Teacher(req.body);
+    const teacherExists = await Teacher.findOne({ name: req.body.name });
+    if (teacherExists) {
+      return res.status(200).json({ message: "تم التحيث" });
+    }
     await teacher.save();
     res.status(201).json(teacher);
   } catch (err) {
@@ -1027,6 +1031,11 @@ app.get('/api/classes', authenticate(['admin', 'secretary', 'teacher']), async (
 app.post('/api/classes', authenticate(['admin', 'secretary']), async (req, res) => {
   try {
     const classObj = new Class(req.body);
+    // chek if calss exist by name and subject and teacher
+    const classExists = await Class.findOne({ name: req.body.name, subject: req.body.subject, teacher: req.body.teacher });
+    if (classExists) {
+      return res.status(200).json({ message: "تم التحيث" });
+    }
     await classObj.save();
     res.status(201).json(classObj);
   } catch (err) {
