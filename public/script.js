@@ -4917,6 +4917,16 @@ ${!student.hasAccount ? `
 <button class="btn btn-sm btn-outline-info btn-action" onclick="showCreateAccountModal('${student._id}')">
     <i class="bi bi-person-plus"></i> إنشاء حساب
 </button>
+
+
+          <button class="btn btn-outline-primary" onclick="editStudent('${student._id}')"><i class="bi bi-pencil"></i> تعديل</button>
+          <button class="btn btn-outline-danger" onclick="deleteStudent('${student._id}')" ><i class="bi bi-trash"></i> حذف</button>
+          <button class="btn btn-outline-success" onclick="showEnrollModal('${student._id}')"><i class="bi bi-book"></i> تسجيل</button>
+          <button class="btn btn-outline-info" onclick="showAttendanceModal('${student._id}')" ><i class="bi bi-clock-history"></i> الحضور</button>
+          <button class="btn btn-outline-warning" onclick="printReceipt('${student._id}')" ><i class="bi bi-cash"></i> طباعة إيصال</button>
+
+
+
 ` : ''}
 </td>
 `;
