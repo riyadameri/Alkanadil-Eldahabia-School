@@ -1,9 +1,580 @@
-let currentUser = null;
 let currentPayment = null;
 let currentClassId = null;
 let currentStudentId = null;
 let scheduleCounter = 1;
 const socket = io(window.location.origin); // Connects to current host
+
+
+
+
+
+
+
+
+
+// Thermal Printer Functions for Student Payment Receipts
+
+// Initialize printer variables
+let port, writer;
+
+// Connect to the thermal printer
+async function connectToThermalPrinter() {
+    try {
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 9600 });
+        writer = port.writable.getWriter();
+        alert("✅ تم التوصيل بالطابعة بنجاح");
+        return true;
+    } catch (err) {
+        console.error("Error connecting to printer:", err);
+        alert("❌ خطأ في الاتصال بالطابعة: " + err.message);
+        return false;
+    }
+}
+
+// Print text to the thermal printer
+async function printTextToPrinter(text) {
+    if (!writer) {
+        alert("⚠️ يرجى الاتصال بالطابعة أولاً");
+        return false;
+    }
+    
+    try {
+        const encoder = new TextEncoder();
+        await writer.write(encoder.encode(text));
+        return true;
+    } catch (err) {
+        console.error("Error printing text:", err);
+        alert("❌ خطأ في الطباعة: " + err.message);
+        return false;
+    }
+}
+
+// Draw a payment receipt on canvas
+function drawPaymentReceipt(paymentData) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 580; // Width for 80mm paper
+    canvas.height = 900; // Increased height to accommodate images
+    
+    const ctx = canvas.getContext("2d");
+    
+    // Clear background
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw school logo
+    const logoImg = new Image();
+    logoImg.src = 'assets/rouad.JPG';
+    ctx.drawImage(logoImg, canvas.width - 100, 10, 80, 80);
+    
+    // Draw header text
+    ctx.fillStyle = "#000000";
+    ctx.textAlign = "right";
+    ctx.font = "bold 28px Arial";
+    ctx.fillText("أكادمية الرواد للتعليم و المعارف", canvas.width - 110, 50);
+    
+    ctx.font = "20px Arial";
+    ctx.fillText("إيصال دفع شهري", canvas.width - 110, 90);
+    
+    // Draw separator
+    ctx.beginPath();
+    ctx.moveTo(20, 120);
+    ctx.lineTo(canvas.width - 20, 120);
+    ctx.stroke();
+    
+    // Draw payment details
+    ctx.font = "18px Arial";
+    let yPosition = 160;
+    
+    ctx.fillText(`الطالب: ${paymentData.studentName}`, canvas.width - 20, yPosition);
+    yPosition += 35;
+    
+    ctx.fillText(`رقم الطالب: ${paymentData.studentId}`, canvas.width - 20, yPosition);
+    yPosition += 35;
+    
+    ctx.fillText(`الحصة: ${paymentData.className}`, canvas.width - 20, yPosition);
+    yPosition += 35;
+    
+    ctx.fillText(`الشهر: ${paymentData.month}`, canvas.width - 20, yPosition);
+    yPosition += 35;
+    
+    ctx.fillText(`المبلغ: ${paymentData.amount} د.ج`, canvas.width - 20, yPosition);
+    yPosition += 35;
+    
+    ctx.fillText(`طريقة الدفع: ${getPaymentMethodName(paymentData.paymentMethod)}`, canvas.width - 20, yPosition);
+    yPosition += 35;
+    
+    ctx.fillText(`تاريخ الدفع: ${paymentData.paymentDate}`, canvas.width - 20, yPosition);
+    yPosition += 35;
+    
+    // Draw separator
+    ctx.beginPath();
+    ctx.moveTo(20, yPosition + 10);
+    ctx.lineTo(canvas.width - 20, yPosition + 10);
+    ctx.stroke();
+    
+    yPosition += 40;
+    
+    // Draw QR code
+    const qrImg = new Image();
+    qrImg.src = 'assets/redox-qr.svg';
+    ctx.drawImage(qrImg, canvas.width/2 - 50, yPosition, 100, 100);
+    yPosition += 110;
+    
+    // Draw footer
+    ctx.font = "16px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("شكراً لثقتكم بنا", canvas.width / 2, yPosition);
+    yPosition += 30;
+    
+    ctx.fillText(paymentData.schoolContact, canvas.width / 2, yPosition);
+    
+    return canvas;
+}
+
+// Draw a signature receipt on canvas
+function drawSignatureReceipt(studentData, className, month) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 580; // Width for 80mm paper
+    canvas.height = 400; // Height for signature receipt
+    
+    const ctx = canvas.getContext("2d");
+    
+    // Clear background
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Set text properties
+    ctx.fillStyle = "#000000";
+    ctx.textAlign = "right";
+    
+    // Draw header
+    ctx.font = "bold 24px Arial";
+    ctx.fillText("إقرار استلام", canvas.width - 20, 40);
+    
+    ctx.font = "20px Arial";
+    ctx.fillText("شهري - توقيع ولي الأمر", canvas.width - 20, 80);
+    
+    // Draw separator
+    ctx.beginPath();
+    ctx.moveTo(20, 110);
+    ctx.lineTo(canvas.width - 20, 110);
+    ctx.stroke();
+    
+    // Draw details
+    ctx.font = "18px Arial";
+    let yPosition = 160;
+    
+    ctx.fillText(`أقر أنا ولي أمر الطالب: ${studentData.name}`, canvas.width - 20, yPosition);
+    yPosition += 35;
+    
+    ctx.fillText(`باستلام المبلغ الشهري لحصة: ${className}`, canvas.width - 20, yPosition);
+    yPosition += 35;
+    
+    ctx.fillText(`لشهر: ${month}`, canvas.width - 20, yPosition);
+    yPosition += 60;
+    
+    // Draw signature line
+    ctx.beginPath();
+    ctx.moveTo(canvas.width - 200, yPosition);
+    ctx.lineTo(canvas.width - 20, yPosition);
+    ctx.stroke();
+    
+    ctx.font = "16px Arial";
+    ctx.fillText("التوقيع:", canvas.width - 220, yPosition + 5);
+    yPosition += 40;
+    
+    ctx.fillText("الاسم:", canvas.width - 220, yPosition);
+    
+    return canvas;
+}
+
+// Convert canvas to ESC/POS format for thermal printing
+function canvasToEscPos(canvas) {
+    const ctx = canvas.getContext("2d");
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const width = canvas.width;
+    const height = canvas.height;
+    
+    // Calculate bytes per line (each byte represents 8 pixels)
+    const bytesPerLine = Math.ceil(width / 8);
+    
+    // Create ESC/POS command array
+    let escpos = [];
+    
+    // Initialize printer
+    escpos.push(0x1B, 0x40); // Initialize printer
+    
+    // Set alignment to center
+    escpos.push(0x1B, 0x61, 0x01); // Center alignment
+    
+    // Add text before image if needed
+    // escpos.push(...new TextEncoder().encode("إيصال الدفع\n"));
+    
+    // Set back to left alignment for image
+    escpos.push(0x1B, 0x61, 0x00); // Left alignment
+    
+    // GS v 0 command for raster bit image
+    escpos.push(0x1D, 0x76, 0x30, 0x00); 
+    
+    // Add width and height (little endian)
+    escpos.push(bytesPerLine & 0xFF, (bytesPerLine >> 8) & 0xFF);
+    escpos.push(height & 0xFF, (height >> 8) & 0xFF);
+    
+    // Convert image data to monochrome bitmap
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x += 8) {
+            let byte = 0;
+            for (let bit = 0; bit < 8; bit++) {
+                const px = (y * width + (x + bit)) * 4;
+                if (x + bit < width) {
+                    // Convert to grayscale and check if pixel is dark enough
+                    const gray = 0.299 * imageData.data[px] + 
+                                0.587 * imageData.data[px + 1] + 
+                                0.114 * imageData.data[px + 2];
+                    if (gray < 128) {
+                        byte |= (0x80 >> bit);
+                    }
+                }
+            }
+            escpos.push(byte);
+        }
+    }
+    
+    // Add cut command (partial cut)
+    escpos.push(0x1D, 0x56, 0x01);
+    
+    return new Uint8Array(escpos);
+}
+
+// Print a payment receipt to the thermal printer
+async function printPaymentReceipt(paymentData) {
+    if (!writer) {
+        const connected = await connectToThermalPrinter();
+        if (!connected) return false;
+    }
+    
+    try {
+        // Draw receipt on canvas
+        const canvas = drawPaymentReceipt(paymentData);
+        
+        // Convert canvas to ESC/POS format
+        const rasterData = canvasToEscPos(canvas);
+        
+        // Send to printer
+        await writer.write(rasterData);
+        
+        return true;
+    } catch (err) {
+        console.error("Error printing receipt:", err);
+        alert("❌ خطأ في طباعة الإيصال: " + err.message);
+        return false;
+    }
+}
+
+// Print a signature receipt to the thermal printer
+async function printSignatureReceipt(studentData, className, month) {
+    if (!writer) {
+        const connected = await connectToThermalPrinter();
+        if (!connected) return false;
+    }
+    
+    try {
+        // Draw signature receipt on canvas
+        const canvas = drawSignatureReceipt(studentData, className, month);
+        
+        // Convert canvas to ESC/POS format
+        const rasterData = canvasToEscPos(canvas);
+        
+        // Send to printer
+        await writer.write(rasterData);
+        
+        return true;
+    } catch (err) {
+        console.error("Error printing signature receipt:", err);
+        alert("❌ خطأ في طباعة إقرار الاستلام: " + err.message);
+        return false;
+    }
+}
+
+// Get payment method name in Arabic
+function getPaymentMethodName(method) {
+    const methods = {
+        'cash': 'نقدي',
+        'bank': 'حوالة بنكية',
+        'online': 'دفع إلكتروني',
+        'card': 'بطاقة ائتمان'
+    };
+    
+    return methods[method] || method;
+}
+
+async function reprintPaymentReceipt(paymentId) {
+    try {
+        // عرض رسالة تحميل
+        Swal.fire({
+            title: 'جاري الطباعة',
+            text: 'يرجى الانتظار أثناء تحضير الإيصال',
+            icon: 'info',
+            showConfirmButton: false,
+            allowOutsideClick: false
+        });
+
+        // جلب بيانات الدفعة من الخادم
+        const response = await fetch(`/api/payments/${paymentId}`, {
+            headers: getAuthHeaders()
+        });
+
+        if (!response.ok) {
+            throw new Error('فشل في جلب بيانات الدفعة');
+        }
+
+        const payment = await response.json();
+
+        // التحقق من اتصال الطابعة
+        if (!writer) {
+            const connected = await connectToThermalPrinter();
+            if (!connected) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'خطأ في الاتصال',
+                    text: 'يرجى التأكد من توصيل الطابعة والمحاولة مرة أخرى',
+                    confirmButtonText: 'حسناً'
+                });
+                return false;
+            }
+        }
+
+        // إعداد بيانات الإيصال
+        const paymentData = {
+            studentName: payment.student?.name || 'غير معروف',
+            studentId: payment.student?.studentId || 'غير معروف',
+            className: payment.class?.name || 'غير معروف',
+            month: payment.month || 'غير محدد',
+            amount: payment.amount || 0,
+            paymentMethod: payment.paymentMethod || 'cash',
+            paymentDate: payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('ar-EG') : 'غير محدد',
+            schoolContact: "الهاتف: 0550123456 | البريد: info@example.com"
+        };
+
+        // رسم الإيصال على Canvas
+        const canvas = drawPaymentReceipt(paymentData);
+        
+        // تحويل Canvas إلى تنسيق ESC/POS
+        const rasterData = canvasToEscPos(canvas);
+        
+        // إرسال البيانات إلى الطابعة
+        await writer.write(rasterData);
+        
+        // إضافة أمر قطع الورق
+        await writer.write(new Uint8Array([0x1D, 0x56, 0x00]));
+        
+        // إظهار رسالة النجاح
+        Swal.fire({
+            icon: 'success',
+            title: 'تمت الطباعة بنجاح',
+            text: 'تمت إعادة طباعة إيصال الدفع بنجاح',
+            confirmButtonText: 'حسناً'
+        });
+        
+        return true;
+        
+    } catch (err) {
+        console.error('Error reprinting receipt:', err);
+        
+        // إظهار رسالة الخطأ
+        Swal.fire({
+            icon: 'error',
+            title: 'خطأ في الطباعة',
+            text: 'حدث خطأ أثناء محاولة إعادة طباعة الإيصال: ' + err.message,
+            confirmButtonText: 'حسناً'
+        });
+        
+        return false;
+    }
+}
+function addReprintButtonToPaymentsTable() {
+    const paymentsTable = document.getElementById('paymentsTable');
+    if (paymentsTable) {
+        paymentsTable.addEventListener('click', function(e) {
+            if (e.target.closest('.btn-reprint')) {
+                const paymentId = e.target.closest('.btn-reprint').dataset.paymentId;
+                reprintPaymentReceipt(paymentId);
+            }
+        });
+    }
+}
+
+
+function modifyPaymentsTable() {
+    const tableBody = document.getElementById('paymentsTable');
+    if (tableBody) {
+        // تحديث الصفوف لإضافة زر إعادة الطباعة
+        const rows = tableBody.querySelectorAll('tr');
+        rows.forEach(row => {
+            const paymentId = row.dataset.paymentId;
+            if (paymentId && !row.querySelector('.btn-reprint')) {
+                const actionCell = row.querySelector('td:last-child');
+                if (actionCell) {
+                    const reprintBtn = document.createElement('button');
+                    reprintBtn.className = 'btn btn-sm btn-info btn-reprint me-1';
+                    reprintBtn.dataset.paymentId = paymentId;
+                    reprintBtn.innerHTML = '<i class="bi bi-printer"></i>';
+                    reprintBtn.title = 'إعادة طباعة الإيصال';
+                    actionCell.prepend(reprintBtn);
+                }
+            }
+        });
+    }
+}
+
+
+// Disconnect from the thermal printer
+async function disconnectFromPrinter() {
+    if (writer) {
+        try {
+            await writer.releaseLock();
+            await port.close();
+            writer = null;
+            port = null;
+            console.log("Printer disconnected");
+        } catch (err) {
+            console.error("Error disconnecting printer:", err);
+        }
+    }
+}
+
+// Example usage:
+// const paymentData = {
+//     studentName: "محمد أحمد",
+//     studentId: "STU2023001",
+//     className: "الرياضيات - الثالثة ثانوي",
+//     month: "يناير 2024",
+//     amount: "6000",
+//     paymentMethod: "cash",
+//     paymentDate: "2024-01-15",
+//     schoolContact: "الهاتف: 0550123456 | البريد: info@example.com"
+// };
+// 
+// printPaymentReceipt(paymentData);
+// 
+// const studentData = {
+//     name: "محمد أحمد",
+//     studentId: "STU2023001"
+// };
+// 
+// printSignatureReceipt(studentData, "الرياضيات - الثالثة ثانوي", "يناير 2024");
+
+
+
+
+document.getElementById("connect").addEventListener("click", async () => {
+    try {
+      port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 9600 });
+      writer = port.writable.getWriter();
+      alert("✅ تم التوصيل بالطابعة");
+    } catch (err) {
+      alert("❌ خطأ: " + err);
+    }
+  });
+
+
+  document.getElementById("print-text").addEventListener("click", async () => {
+    if (!writer) return alert("⚠️ وصل الطابعة أولاً");
+    const encoder = new TextEncoder();
+    let text = '\x1B\x40'; // init
+    text += '\x1B\x61\x01'; // center
+    text += "أكادمية الرواد للتعليم و المعارف\n";
+    text += "إيصال دفع شهري\n";
+    text += "-------------------------\n";
+    text += '\x1B\x61\x00'; // left align
+    text += "الطالب: محمد أحمد\n";
+    text += "المبلغ: 1000 د.ج\n";
+    text += "طريقة الدفع: نقدي\n";
+    text += "-------------------------\n";
+    text += '\x1B\x61\x01'; // center
+    text += "شكراً لكم\n\n\n";
+    await writer.write(encoder.encode(text));
+    await writer.write(new Uint8Array([0x1D, 0x56, 0x00])); // قص
+  });
+
+  function drawInvoice() {
+    const canvas = document.getElementById("billCanvas");
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#000";
+    ctx.textAlign = "center";
+    ctx.font = "28px Arial";
+    ctx.fillText("🛒 متجر البرمجة", canvas.width/2, 50);
+    ctx.font = "20px Arial";
+    ctx.fillText("فاتورة مبيعات", canvas.width/2, 90);
+
+    ctx.textAlign = "right";
+    ctx.font = "18px Arial";
+    let y = 140;
+    ctx.fillText("الصنف          الكمية   السعر", canvas.width - 20, y);
+
+    const items = [
+      {name: "قهوة", qty: 2, price: 10},
+      {name: "شاي", qty: 1, price: 5},
+      {name: "سكر", qty: 3, price: 9}
+    ];
+    y += 40; let total = 0;
+    items.forEach(it => {
+      ctx.fillText(`${it.name}    ${it.qty}   ${it.price}`, canvas.width - 20, y);
+      total += it.price; y += 35;
+    });
+
+    ctx.fillText("---------------------------------", canvas.width - 20, y+10);
+    ctx.fillText("الإجمالي: " + total + " د.ج", canvas.width - 20, y+50);
+    ctx.textAlign = "center";
+    ctx.font = "16px Arial";
+    ctx.fillText("شكرًا لتسوقكم معنا ❤️", canvas.width/2, y+120);
+    return canvas;
+  }
+
+  // ----------- تحويل Canvas إلى ESC/POS ----------
+  function canvasToEscPosGSv0(canvas) {
+    const ctx = canvas.getContext("2d");
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const width = canvas.width;
+    const height = canvas.height;
+    const bytesPerLine = Math.ceil(width / 8);
+    let escpos = [];
+    escpos.push(0x1D, 0x76, 0x30, 0x00,
+                bytesPerLine & 0xFF, (bytesPerLine >> 8) & 0xFF,
+                height & 0xFF, (height >> 8) & 0xFF);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x += 8) {
+        let byte = 0;
+        for (let bit = 0; bit < 8; bit++) {
+          const px = (y * width + (x + bit)) * 4;
+          if (x + bit < width) {
+            const gray = 0.299 * imageData.data[px] +
+                         0.587 * imageData.data[px+1] +
+                         0.114 * imageData.data[px+2];
+            if (gray < 128) byte |= (0x80 >> bit);
+          }
+        }
+        escpos.push(byte);
+      }
+    }
+    return new Uint8Array(escpos);
+  }
+
+  // ----------- طباعة Canvas ----------
+  document.getElementById("print-canvas").addEventListener("click", async () => {
+    if (!writer) return alert("⚠️ وصل الطابعة أولاً");
+    const canvas = drawInvoice();
+    const rasterData = canvasToEscPosGSv0(canvas);
+    await writer.write(rasterData);
+    await writer.write(new Uint8Array([0x1D, 0x56, 0x00])); // قص
+    alert("🖨️ تمت الطباعة (Canvas)");
+  });
+
+
 
 // Authentication functions
 async function login(username, password) {
@@ -185,7 +756,14 @@ function setupDashboardRFID() {
         });
     }
 }
+
+// إضافة هذه الدالة لتهيئة نظام ا
+
+
+
 function initApp() {
+
+
     initAccountingEventListeners();
 
     // بدء خدمات الخلفية
@@ -214,36 +792,41 @@ if (currentUser) {
   loadCards();
   loadClassroomsForClassModal();
   loadTeachersForClassModal();
+  
 
   loadLiveClasses();
   loadDataForLiveClassModal();
-// في دالة initApp() أو في مستمع الأحداث للتنقل
-document.getElementById('gate-interface-link').addEventListener('click', function() {
-    initGateInterface();
-});
-  document.getElementById('accountStatusFilter').addEventListener('change', loadStudentAccounts);
-  document.getElementById('accountSearchInput').addEventListener('keyup', function(e) {
-    if (e.key === 'Enter') {
-      loadStudentAccounts();
-    }
-  });
-  
-  loadStudentAccounts();
-  
-  // Search functionality
-  document.getElementById('studentSearchInput').addEventListener('input', searchStudents);
-  document.getElementById('paymentSearchInput').addEventListener('input', searchPayments);
 
-  // Set today's date as default registration date
-  document.getElementById('registrationDate').value = new Date().toISOString().split('T')[0];
   
-  // Initialize modals
-  const modalElements = document.querySelectorAll('.modal');
-  modalElements.forEach(modalEl => {
-    new bootstrap.Modal(modalEl);
-  });
   
-  // Initialize tooltips
+  
+  // في دالة initApp() أو في مستمع الأحداث للتنقل
+  document.getElementById('gate-interface-link').addEventListener('click', function() {
+      initGateInterface();
+    });
+    document.getElementById('accountStatusFilter').addEventListener('change', loadStudentAccounts);
+    document.getElementById('accountSearchInput').addEventListener('keyup', function(e) {
+        if (e.key === 'Enter') {
+            loadStudentAccounts();
+        }
+    });
+    
+    loadStudentAccounts();
+    
+    // Search functionality
+    document.getElementById('studentSearchInput').addEventListener('input', searchStudents);
+    document.getElementById('paymentSearchInput').addEventListener('input', searchPayments);
+    
+    // Set today's date as default registration date
+    document.getElementById('registrationDate').value = new Date().toISOString().split('T')[0];
+    
+    // Initialize modals
+    const modalElements = document.querySelectorAll('.modal');
+    modalElements.forEach(modalEl => {
+        new bootstrap.Modal(modalEl);
+    });
+    
+    // Initialize tooltips
   const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
   tooltipTriggerList.map(tooltipTriggerEl => {
     return new bootstrap.Tooltip(tooltipTriggerEl);
@@ -253,10 +836,11 @@ document.getElementById('gate-interface-link').addEventListener('click', functio
   const liveClassModal = new bootstrap.Modal(document.getElementById('addLiveClassModal'));
   document.getElementById('live-classes-link').addEventListener('click', function() {
     loadDataForLiveClassModal();
-  });
+});
 
   // Initialize RFID input handling
   setupRFIDInputHandling();
+  
 
   
 }
@@ -991,398 +1575,126 @@ window.showPaymentModal = async function (paymentId) {
     }
 };
 
-// Reprint payment receipt
-window.reprintPaymentReceipt = async function (paymentId) {
+
+
+
+window.showPaymentModal = async function(paymentId) {
     try {
-        const response = await fetch(`/api/payments/${paymentId}`, {
+        const paymentResponse = await fetch(`/api/payments/${paymentId}`, {
             headers: getAuthHeaders()
         });
 
-        if (response.ok) {
-            const payment = await response.json();
-            await printPaymentReceiptToThermalPrinter(payment);
-        } else {
-            throw new Error('فشل في جلب بيانات الدفعة');
+        if (paymentResponse.status === 401) {
+            logout();
+            return;
+        }
+
+        const payment = await paymentResponse.json();
+
+        const { value: formValues } = await Swal.fire({
+            title: 'تسديد الدفعة',
+            html: `
+                <div class="payment-modal-container p-3">
+                    <div class="mb-3">
+                        <label class="form-label">الطالب:</label>
+                        <input type="text" class="form-control" value="${payment.student?.name || 'غير معروف'}" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الحصة:</label>
+                        <input type="text" class="form-control" value="${payment.class?.name || 'غير معروف'}" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الشهر:</label>
+                        <input type="text" class="form-control" value="${payment.month || 'غير محدد'}" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">المبلغ:</label>
+                        <input type="text" class="form-control" value="${payment.amount || 0} د.ك" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">تاريخ الدفع:</label>
+                        <input type="date" id="payment-date" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">طريقة الدفع:</label>
+                        <select id="payment-method" class="form-select" required>
+                            <option value="cash">نقدي</option>
+                            <option value="bank">حوالة بنكية</option>
+                            <option value="online">دفع إلكتروني</option>
+                        </select>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="print-receipt" checked>
+                        <label class="form-check-label" for="print-receipt">
+                            طباعة الإيصال تلقائياً
+                        </label>
+                    </div>
+                </div>
+            `,
+            focusConfirm: false,
+            showCancelButton: true,
+            confirmButtonText: 'تأكيد الدفع',
+            cancelButtonText: 'إلغاء',
+            preConfirm: () => {
+                return {
+                    paymentDate: document.getElementById('payment-date').value,
+                    paymentMethod: document.getElementById('payment-method').value,
+                    printReceipt: document.getElementById('print-receipt').checked
+                };
+            }
+        });
+
+        if (formValues) {
+            if (!formValues.paymentDate) {
+                formValues.paymentDate = new Date().toISOString().split('T')[0];
+            }
+
+            const response = await fetch(`/api/payments/${paymentId}/pay`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...getAuthHeaders()
+                },
+                body: JSON.stringify({
+                    paymentDate: formValues.paymentDate,
+                    paymentMethod: formValues.paymentMethod
+                })
+            });
+
+            if (response.ok) {
+                const updatedPayment = await response.json();
+
+                // استخدام نظام الطباعة الجديد
+                if (formValues.printReceipt) {
+                    await printPaymentReceiptToThermalPrinter(updatedPayment);
+                }
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'تم التسديد بنجاح',
+                    text: formValues.printReceipt ? 'تم تسجيل الدفعة وطباعة الإيصال' : 'تم تسجيل الدفعة بنجاح',
+                    confirmButtonText: 'حسناً'
+                });
+
+                loadPayments();
+            } else {
+                throw new Error('فشل في تسجيل الدفعة');
+            }
         }
     } catch (err) {
         console.error('Error:', err);
         Swal.fire({
             icon: 'error',
             title: 'خطأ',
-            text: 'حدث خطأ أثناء محاولة إعادة طباعة الإيصال',
+            text: 'حدث خطأ أثناء محاولة تسجيل الدفعة',
             confirmButtonText: 'حسناً'
         });
     }
 };
 
-// Print payment receipt to thermal printer
-async function printPaymentReceiptToThermalPrinter(payment) {
-    try {
-        let printSuccess = false;
-        
-        // محاولة الطباعة باستخدام الطابعة الافتراضية إذا كانت محددة
-        const defaultPrinter = localStorage.getItem('defaultPrinter');
-        if (defaultPrinter) {
-            printSuccess = await printWithDefaultPrinter(payment);
-        }
-        
-        // إذا لم تنجح الطباعة بالطابعة الافتراضية، جرب البحث عن طابعة
-        if (!printSuccess) {
-            printSuccess = await printToUSBPrinter(payment);
-        }
-        
-        if (printSuccess) {
-            Swal.fire({
-                icon: 'success',
-                title: 'تمت الطباعة',
-                text: 'تم إرسال الإيصال إلى الطابعة الحرارية بنجاح',
-                timer: 2000,
-                showConfirmButton: false
-            });
-            return;
-        }
-        
-        // إذا فشلت الطباعة الحرارية، استخدم الطباعة العادية
-        await printPaymentReceipt(payment);
-        
-    } catch (err) {
-        console.error('خطأ في الطباعة:', err);
-        // في حالة الخطأ، استخدم الطباعة العادية كبديل
-        await printPaymentReceipt(payment);
-    }
-}
-async function showPrinterSelection() {
-    try {
-        const printers = await getAvailableUSBPrinters();
-        
-        if (printers.length === 0) {
-            Swal.fire({
-                icon: 'info',
-                title: 'لا توجد طابعات',
-                text: 'لم يتم العثور على أي طابعات متصلة. يرجى توصيل طابعة والمحاولة مرة أخرى.',
-                confirmButtonText: 'حسناً'
-            });
-            return;
-        }
-        
-        const printerOptions = printers.reduce((options, printer, index) => {
-            options[index] = `${printer.manufacturerName || 'Unknown'} - ${printer.productName || `ID: ${printer.vendorId}:${printer.productId}`}`;
-            return options;
-        }, {});
-        
-        const { value: selectedIndex } = await Swal.fire({
-            title: 'اختر الطابعة',
-            input: 'select',
-            inputOptions: printerOptions,
-            inputPlaceholder: 'اختر طابعة',
-            showCancelButton: true,
-            confirmButtonText: 'تعيين كافتراضي',
-            cancelButtonText: 'إلغاء'
-        });
-        
-        if (selectedIndex !== undefined) {
-            localStorage.setItem('defaultPrinter', JSON.stringify(printers[selectedIndex]));
-            Swal.fire({
-                icon: 'success',
-                title: 'تم التعيين',
-                text: 'تم تعيين الطابعة الافتراضية بنجاح',
-                timer: 1500,
-                showConfirmButton: false
-            });
-        }
-    } catch (error) {
-        console.error('خطأ في عرض خيارات الطابعة:', error);
-        Swal.fire({
-            icon: 'error',
-            title: 'خطأ',
-            text: 'حدث خطأ أثناء محاولة عرض خيارات الطابعة',
-            confirmButtonText: 'حسناً'
-        });
-    }
-}
-function addPrinterManagementButton() {
-    // البحث عن مكان مناسب في الواجهة لإضافة الزر
-    const header = document.querySelector('.app-header');
-    
-    if (header) {
-        const printerButton = document.createElement('button');
-        printerButton.className = 'btn btn-outline-secondary me-2';
-        printerButton.innerHTML = '<i class="bi bi-printer"></i> إدارة الطابعات';
-        printerButton.onclick = showPrinterSelection;
-        
-        header.appendChild(printerButton);
-    }
-}
-document.addEventListener('DOMContentLoaded', function() {
-    addPrinterManagementButton();
-    
-    // محاولة إعداد طابعة افتراضية إذا لم تكن موجودة
-    if (!localStorage.getItem('defaultPrinter')) {
-        setupDefaultPrinter();
-    }
-});
 
 
 
-async function printToUSBPrinter(payment) {
-    return new Promise(async (resolve) => {
-        try {
-            // التحقق من دعم واجهة WebUSB API
-            if (!('usb' in navigator)) {
-                console.log('WebUSB API غير مدعومة في هذا المتصفح');
-                resolve(false);
-                return;
-            }
-            
-            // فلترة الطابعات الحرارية الشائعة
-            const VENDOR_IDS = {
-                'STAR': 0x0519,
-                'EPSON': 0x04B8,
-                'ZEBRA': 0x0A5F,
-                'BIXOLON': 0x1504,
-                'POSIFLEX': 0x1C3E
-            };
-            
-            // طلب إذن الوصول إلى جهاز USB
-            const device = await navigator.usb.requestDevice({
-                filters: Object.values(VENDOR_IDS).map(vendorId => ({ vendorId }))
-            });
-            
-            await device.open();
-            
-            // البحث عن واجهة الطابعة
-            let interfaceNumber;
-            for (const config of device.configurations) {
-                for (const iface of config.interfaces) {
-                    if (iface.alternate.endpoints.some(endpoint => 
-                        endpoint.direction === 'out')) {
-                        interfaceNumber = iface.interfaceNumber;
-                        break;
-                    }
-                }
-                if (interfaceNumber !== undefined) break;
-            }
-            
-            if (interfaceNumber === undefined) {
-                console.error('لم يتم العثور على واجهة طباعة مناسبة');
-                await device.close();
-                resolve(false);
-                return;
-            }
-            
-            await device.selectConfiguration(1);
-            await device.claimInterface(interfaceNumber);
-            
-            // إنشاء محتوى الإيصال للطابعة الحرارية
-            const receiptContent = formatReceiptForThermalPrinter(payment);
-            
-            // تحويل المحتوى إلى تنسيق يمكن إرساله
-            const encoder = new TextEncoder();
-            const data = encoder.encode(receiptContent);
-            
-            // البحث عن endpoint للإرسال
-            const endpoint = device.configuration.interfaces[interfaceNumber]
-                .alternate.endpoints.find(endpoint => endpoint.direction === 'out');
-            
-            if (!endpoint) {
-                console.error('لم يتم العثور على endpoint للإرسال');
-                await device.close();
-                resolve(false);
-                return;
-            }
-            
-            // إرسال البيانات إلى الطابعة
-            await device.transferOut(endpoint.endpointNumber, data);
-            
-            // إغلاق الاتصال
-            await device.close();
-            
-            resolve(true);
-            
-        } catch (error) {
-            console.error('فشل الطباعة على الطابعة الحرارية:', error);
-            
-            // إذا لم يتم اختيار جهاز، لا تعتبره خطأ
-            if (error.name === 'NotFoundError') {
-                console.log('لم يتم اختيار أي جهاز طباعة');
-            } else {
-                console.error('خطأ في الطباعة:', error);
-            }
-            
-            resolve(false);
-        }
-    });
-}
-
-
-async function printToThermalPrinter(payment) {
-    return new Promise(async (resolve) => {
-        try {
-            // التحقق من دعم واجهة Web Serial API
-            if (!('serial' in navigator)) {
-                console.log('Web Serial API غير مدعومة في هذا المتصفح');
-                resolve(false);
-                return;
-            }
-            
-            // طلب إذن الوصول إلى المنافذ التسلسلية
-            const port = await navigator.serial.requestPort();
-            await port.open({ baudRate: 9600 });
-            
-            // إنشاء محتوى الإيصال للطابعة الحرارية
-            const receiptContent = formatReceiptForThermalPrinter(payment);
-            
-            // تحويل المحتوى إلى تنسيق يمكن إرساله
-            const encoder = new TextEncoder();
-            const data = encoder.encode(receiptContent);
-            
-            const writer = port.writable.getWriter();
-            await writer.write(data);
-            
-            // إغلاق الاتصال
-            await writer.close();
-            await port.close();
-            
-            resolve(true);
-            
-        } catch (error) {
-            console.error('فشل الطباعة على الطابعة الحرارية:', error);
-            resolve(false);
-        }
-    });
-}
-
-// Check if thermal printer is available
-async function checkThermalPrinter() {
-    try {
-        // Try to detect thermal printer (COM1 for Windows)
-        if (navigator && navigator.parallel) {
-            // Check for parallel port printer (common for thermal printers)
-            const ports = await navigator.parallel.getPorts();
-            return ports.length > 0;
-        }
-        
-        // For browsers that don't support parallel port access,
-        // we'll assume the printer might be available
-        // In a real implementation, you would have more robust detection
-        return false; // Default to false for safety
-    } catch (err) {
-        console.log('Thermal printer not detected, using fallback');
-        return false;
-    }
-}
-
-// Format receipt for thermal printer (80mm width)
-function formatReceiptForThermalPrinter(payment) {
-    const now = new Date();
-    const receiptDate = now.toLocaleDateString('ar-EG');
-    const receiptTime = now.toLocaleTimeString('ar-EG');
-    
-    // تنسيق الإيصال للطابعة الحرارية (40 عمود)
-    let receipt = '\x1B\x40'; // تهيئة الطابعة
-    receipt += '\x1B\x61\x01'; // محاذاة إلى الوسط
-    
-    // العنوان
-    receipt += 'المركز الجزائري للعبقرية\n';
-    receipt += 'إيصال دفع شهري\n';
-    receipt += '====================\n\n';
-    
-    receipt += '\x1B\x61\x00'; // محاذاة لليسار
-    
-    // معلومات الإيصال
-    receipt += `التاريخ: ${receiptDate}\n`;
-    receipt += `الوقت: ${receiptTime}\n`;
-    receipt += `رقم الإيصال: PAY-${payment._id.slice(-6).toUpperCase()}\n`;
-    receipt += '────────────────────\n';
-    
-    // معلومات الطالب
-    receipt += `الطالب: ${payment.student?.name || 'غير معروف'}\n`;
-    receipt += `رقم الطالب: ${payment.student?.studentId || 'غير معروف'}\n`;
-    receipt += `الحصة: ${payment.class?.name || 'غير معروف'}\n`;
-    receipt += `الشهر: ${payment.month}\n`;
-    receipt += '────────────────────\n';
-    
-    // تفاصيل الدفع
-    receipt += `المبلغ: ${payment.amount} د.ك\n`;
-    receipt += `طريقة الدفع: ${getPaymentMethodName(payment.paymentMethod)}\n`;
-    receipt += `تاريخ الدفع: ${new Date(payment.paymentDate).toLocaleDateString('ar-EG')}\n`;
-    receipt += '────────────────────\n\n';
-    
-    receipt += '\x1B\x61\x01'; // محاذاة إلى الوسط
-    receipt += 'شكراً لكم\n';
-    receipt += 'نتمنى لطالبنا النجاح والتوفيق\n';
-    receipt += '\n\n\n\n';
-    
-    // قطع الورق (إن أمكن)
-    receipt += '\x1D\x56\x41\x03'; // أمر قطع الورق (ل大部分 الطابعات)
-    
-    return receipt;
-}
-
-
-async function getAvailableUSBPrinters() {
-    try {
-        if (!('usb' in navigator)) {
-            console.log('WebUSB API غير مدعومة في هذا المتصفح');
-            return [];
-        }
-        
-        // الحصول على الأجهزة المتاحة بالفعل
-        const devices = await navigator.usb.getDevices();
-        
-        return devices.map(device => ({
-            vendorId: device.vendorId,
-            productId: device.productId,
-            productName: device.productName,
-            manufacturerName: device.manufacturerName
-        }));
-    } catch (error) {
-        console.error('خطأ في الحصول على قائمة الطابعات:', error);
-        return [];
-    }
-}
-
-async function setupDefaultPrinter() {
-    try {
-        const printers = await getAvailableUSBPrinters();
-        
-        if (printers.length > 0) {
-            // حفظ معلومات الطابعة الأولى كافتراضية
-            localStorage.setItem('defaultPrinter', JSON.stringify(printers[0]));
-            console.log('تم تعيين الطابعة الافتراضية:', printers[0]);
-            return true;
-        }
-        
-        return false;
-    } catch (error) {
-        console.error('خطأ في إعداد الطابعة الافتراضية:', error);
-        return false;
-    }
-}
-async function printWithDefaultPrinter(payment) {
-    try {
-        const defaultPrinter = localStorage.getItem('defaultPrinter');
-        
-        if (!defaultPrinter) {
-            console.log('لا توجد طابعة افتراضية معينة');
-            return false;
-        }
-        
-        const printer = JSON.parse(defaultPrinter);
-        
-        // هنا يمكنك تنفيذ منطق الطباعة باستخدام معلومات الطابعة المخزنة
-        // هذا يعتمد على تنفيذك لمكتبة أو API معينة للطباعة
-        
-        console.log('جاري الطباعة على الطابعة الافتراضية:', printer);
-        
-        // في هذا المثال، سنستخدم نفس دالة الطباعة عبر USB
-        return await printToUSBPrinter(payment);
-        
-    } catch (error) {
-        console.error('خطأ في الطباعة باستخدام الطابعة الافتراضية:', error);
-        return false;
-    }
-}
 
 
 
@@ -1397,157 +1709,9 @@ function getPaymentMethodName(method) {
     return methods[method] || method;
 }
 // Send content to thermal printer
-async function sendToThermalPrinter(content) {
-    try {
-        // This is a simplified version - in a real implementation,
-        // you would use a proper printer API or service
-        
-        // For browsers that support it, try using the Parallel Port API
-        if (navigator.parallel) {
-            const ports = await navigator.parallel.getPorts();
-            if (ports.length > 0) {
-                const port = ports[0];
-                await port.open({ baudRate: 9600 });
-                
-                const encoder = new TextEncoder();
-                const data = encoder.encode(content);
-                
-                await port.write(data);
-                await port.close();
-                
-                return true;
-            }
-        }
-        
-        // If no parallel port API, try using a local service
-        // This would typically require a desktop application bridge
-        console.log('Sending to thermal printer:', content);
-        
-        // For demonstration purposes, we'll just show the content
-        // that would be sent to the printer
-        const printWindow = window.open('', '_blank');
-        printWindow.document.write(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Thermal Printer Output</title>
-                <style>
-                    body { 
-                        font-family: monospace; 
-                        white-space: pre-wrap;
-                        width: 80mm;
-                        margin: 0;
-                        padding: 5mm;
-                        font-size: 12px;
-                    }
-                </style>
-            </head>
-            <body>${content.replace(/\n/g, '<br>')}</body>
-            </html>
-        `);
-        printWindow.document.close();
-        
-        return false;
-    } catch (err) {
-        console.error('Error sending to thermal printer:', err);
-        throw err;
-    }
-}
+
 
 // Original print payment receipt function (fallback)
-async function printPaymentReceipt(payment) {
-    return new Promise((resolve) => {
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        document.body.appendChild(iframe);
-
-        const doc = iframe.contentWindow.document;
-
-        doc.open();
-        doc.write(`
-            <!DOCTYPE html>
-            <html lang="ar" dir="rtl">
-            <head>
-                <meta charset="UTF-8">
-                <title>إيصال دفع</title>
-                <style>
-                    body {
-                        font-family: Arial, sans-serif;
-                        width: 80mm;
-                        margin: 0 auto;
-                        padding: 10px;
-                    }
-                    .header {
-                        text-align: center;
-                        margin-bottom: 15px;
-                    }
-                    .receipt-info {
-                        margin-bottom: 15px;
-                    }
-                    .receipt-info div {
-                        display: flex;
-                        justify-content: space-between;
-                        margin-bottom: 5px;
-                    }
-                    .footer {
-                        margin-top: 20px;
-                        text-align: center;
-                        font-size: 12px;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="header">
-                    <h3>إيصال دفع</h3>
-                    <p>${new Date().toLocaleDateString('ar-EG')}</p>
-                </div>
-                
-                <div class="receipt-info">
-                    <div>
-                        <span>اسم الطالب:</span>
-                        <span>${payment.student?.name || 'غير معروف'}</span>
-                    </div>
-                    <div>
-                        <span>الحصة:</span>
-                        <span>${payment.class?.name || 'غير معروف'}</span>
-                    </div>
-                    <div>
-                        <span>الشهر:</span>
-                        <span>${payment.month}</span>
-                    </div>
-                    <div>
-                        <span>المبلغ:</span>
-                        <span>${payment.amount} د.ك</span>
-                    </div>
-                </div>
-                
-                <div class="footer">
-                    <p>شكراً لكم</p>
-                    <p>${new Date().toLocaleTimeString('ar-EG')}</p>
-                </div>
-                
-                <script>
-                    window.onload = function() {
-                        setTimeout(function() {
-                            window.print();
-                            setTimeout(function() {
-                                window.close();
-                            }, 500);
-                        }, 500);
-                    };
-                </script>
-            </body>
-            </html>
-        `);
-        doc.close();
-
-        iframe.contentWindow.onafterprint = function() {
-            document.body.removeChild(iframe);
-            resolve();
-        };
-    });
-}
-
 
 // When student selection changes in payments section
 document.getElementById('paymentStudentSelect').addEventListener('change', function () {
@@ -2209,7 +2373,6 @@ window.showPaymentModal = async function(paymentId) {
         });
 
         if (formValues) {
-            // تعيين تاريخ الدفع الافتراضي إذا لم يتم تقديمه
             if (!formValues.paymentDate) {
                 formValues.paymentDate = new Date().toISOString().split('T')[0];
             }
@@ -2229,7 +2392,7 @@ window.showPaymentModal = async function(paymentId) {
             if (response.ok) {
                 const updatedPayment = await response.json();
 
-                // طباعة إيصال الدفع تلقائياً إذا طلب المستخدم ذلك
+                // استخدام نظام الطباعة الجديد
                 if (formValues.printReceipt) {
                     await printPaymentReceiptToThermalPrinter(updatedPayment);
                 }
@@ -2241,12 +2404,6 @@ window.showPaymentModal = async function(paymentId) {
                     confirmButtonText: 'حسناً'
                 });
 
-                // تحديث عرض الطلاب إذا كانت هناك حصة مرتبطة
-                if (payment.class?._id) {
-                    showClassStudents(payment.class._id);
-                }
-                
-                // تحديث جدول المدفوعات
                 loadPayments();
             } else {
                 throw new Error('فشل في تسجيل الدفعة');
@@ -2341,98 +2498,9 @@ window.showPaymentModal = async function(paymentId) {
     }
 };
 
-async function printPaymentReceipt(payment) {
-    return new Promise((resolve) => {
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        document.body.appendChild(iframe);
-        
-        const doc = iframe.contentWindow.document;
-        
-        doc.open();
-        doc.write(`
-            <!DOCTYPE html>
-            <html lang="ar" dir="rtl">
-            <head>
-                <meta charset="UTF-8">
-                <title>إيصال دفع</title>
-                <style>
-                    body {
-                        font-family: Arial, sans-serif;
-                        width: 80mm;
-                        margin: 0 auto;
-                        padding: 10px;
-                    }
-                    .header {
-                        text-align: center;
-                        margin-bottom: 15px;
-                    }
-                    .receipt-info {
-                        margin-bottom: 15px;
-                    }
-                    .receipt-info div {
-                        display: flex;
-                        justify-content: space-between;
-                        margin-bottom: 5px;
-                    }
-                    .footer {
-                        margin-top: 20px;
-                        text-align: center;
-                        font-size: 12px;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="header">
-                    <h3>إيصال دفع</h3>
-                    <p>${new Date().toLocaleDateString('ar-EG')}</p>
-                </div>
-                
-                <div class="receipt-info">
-                    <div>
-                        <span>اسم الطالب:</span>
-                        <span>${payment.student?.name || 'غير معروف'}</span>
-                    </div>
-                    <div>
-                        <span>الحصة:</span>
-                        <span>${payment.class?.name || 'غير معروف'}</span>
-                    </div>
-                    <div>
-                        <span>الشهر:</span>
-                        <span>${payment.month}</span>
-                    </div>
-                    <div>
-                        <span>المبلغ:</span>
-                        <span>${payment.amount} د.ك</span>
-                    </div>
-                </div>
-                
-                <div class="footer">
-                    <p>شكراً لكم</p>
-                    <p>${new Date().toLocaleTimeString('ar-EG')}</p>
-                </div>
-                
-                <script>
-                    window.onload = function() {
-                        setTimeout(function() {
-                            window.print();
-                            setTimeout(function() {
-                                window.close();
-                            }, 500);
-                        }, 500);
-                    };
-                </script>
-            </body>
-            </html>
-        `);
-        doc.close();
-        
-        iframe.contentWindow.onafterprint = function() {
-            document.body.removeChild(iframe);
-            resolve();
-        };
-    });
-}
+// async function printPaymentReceipt(payment) {
+//     return await printPaymentReceiptToThermalPrinter(payment);
+// }
 
 // Helper function to convert numbers to Arabic words
 function convertNumberToArabicWords(number) {
@@ -6112,19 +6180,6 @@ window.createStudentAccount = async function() {
 
 
 // Add this in your initialization code
-// Add this to your initialization code
-document.addEventListener('DOMContentLoaded', function() {
-      initStudentAccountsSection();
-      
-// Set up the form submission
-const accountForm = document.getElementById('addStudentAccountForm');
-if (accountForm) {
-accountForm.addEventListener('submit', function(e) {
-e.preventDefault();
-createStudentAccount();
-});
-}
-});
 
 function initStudentAccountsSection() {
     // Load accounts on section show
@@ -6369,256 +6424,25 @@ document.getElementById('connectRFIDBtn').addEventListener('click', function() {
 
 
 async function printRegistrationReceipt(studentData, amount = 600) {
-    return new Promise((resolve) => {
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        document.body.appendChild(iframe);
+    try {
+        // استخدام نظام الطباعة الجديد
+        const canvas = await PrinterService.createRegistrationCanvas(studentData, amount);
+        const escposData = await PrinterService.canvasToEscPos(canvas);
         
-        const doc = iframe.contentWindow.document;
+        await PrinterService.connectToSerialPrinter();
+        await PrinterService.sendToPrinter(escposData);
+        await PrinterService.disconnect();
         
-        doc.open();
-        doc.write(`
-            <!DOCTYPE html>
-            <html lang="ar" dir="rtl">
-            <head>
-                <meta charset="UTF-8">
-                <title>إيصال تسجيل طالب</title>
-                <style>
-                    @page {
-                        size: A4;
-                        margin: 0;
-                    }
-                    body {
-                        width: 210mm;
-                        height: 297mm;
-                        margin: 0;
-                        padding: 0;
-                        font-family: 'Arial', sans-serif;
-                        color: #333;
-                        line-height: 1.6;
-                        display: flex;
-                        justify-content: center;
-                        align-items: center;
-                    }
-                    .receipt-container {
-                        width: 150mm;
-                        height: auto;
-                        border: 2px solid #3498db;
-                        border-radius: 5px;
-                        padding: 10mm;
-                        box-sizing: border-box;
-                        position: relative;
-                        overflow: hidden;
-                        box-shadow: 0 0 10px rgba(0,0,0,0.1);
-                    }
-                    .logo-container {
-                        background-color: #000;
-                        padding: 10px;
-                        border-radius: 5px;
-                        display: inline-block;
-                        margin-bottom: 15px;
-                    }
-                    .logo {
-                        height: 40px;
-                        filter: brightness(0) invert(1);
-                        
-                    }
-                    .header {
-                        text-align: center;
-                        margin-bottom: 15px;
-                        border-bottom: 2px solid #3498db;
-                        padding-bottom: 10px;
-                    }
-                    .title {
-                        color: #2c3e50;
-                        margin: 10px 0 5px;
-                        font-size: 20px;
-                    }
-                    .subtitle {
-                        color: #7f8c8d;
-                        font-size: 12px;
-                    }
-                    .receipt-details {
-                        margin: 15px 0;
-                    }
-                    .detail-row {
-                        display: flex;
-                        justify-content: space-between;
-                        margin-bottom: 10px;
-                        padding-bottom: 6px;
-                        border-bottom: 1px dashed #ddd;
-                        font-size: 12px;
-                    }
-                    .detail-label {
-                        font-weight: bold;
-                        color: #2c3e50;
-                        width: 40%;
-                    }
-                    .detail-value {
-                        color: #34495e;
-                        width: 60%;
-                        text-align: left;
-                    }
-                    .amount-section {
-                        background-color: #f8f9fa;
-                        padding: 10px;
-                        border-radius: 5px;
-                        margin: 15px 0;
-                        text-align: center;
-                        border: 1px solid #eee;
-                    }
-                    .amount {
-                        font-size: 22px;
-                        color: #e74c3c;
-                        font-weight: bold;
-                        margin: 5px 0;
-                    }
-                    .barcode {
-                        text-align: center;
-                        margin: 15px 0;
-                        padding: 8px;
-                        background-color: #f8f9fa;
-                        border-radius: 5px;
-                    }
-                    .footer {
-                        text-align: center;
-                        margin-top: 20px;
-                        font-size: 10px;
-                        color: #7f8c8d;
-                        border-top: 2px solid #3498db;
-                        padding-top: 8px;
-                    }
-                    .signature {
-                        display: flex;
-                        justify-content: space-between;
-                        margin-top: 30px;
-                    }
-                    .signature-line {
-                        border-top: 1px solid #333;
-                        width: 150px;
-                        text-align: center;
-                        padding-top: 5px;
-                        font-size: 10px;
-                    }
-                    .watermark {
-                        position: absolute;
-                        opacity: 0.05;
-                        font-size: 80px;
-                        color: #3498db;
-                        transform: rotate(-30deg);
-                        left: 50%;
-                        top: 50%;
-                        z-index: 0;
-                        font-weight: bold;
-                        pointer-events: none;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="receipt-container">
-                    <div class="watermark">${studentData.studentId}</div>
-                    
-                    <div class="header">
-                        <div class="logo-container">
-                            <img src="https://redoxcsl.web.app/assets/redox-icon.png" class="logo">
-                        </div>
-                        <h1 class="title">إيصال تسجيل طالب</h1>
-                        <p class="subtitle">${new Date().toLocaleDateString('ar-EG', { 
-                            weekday: 'long', 
-                            year: 'numeric', 
-                            month: 'long', 
-                            day: 'numeric' 
-                        })}</p>
-                    </div>
-                    
-                    <div class="receipt-details">
-                        <div class="detail-row">
-                            <span class="detail-label">رقم الإيصال:</span>
-                            <span class="detail-value">REG-${Date.now().toString().slice(-6)}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">اسم الطالب:</span>
-                            <span class="detail-value">${studentData.name}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">رقم الطالب:</span>
-                            <span class="detail-value">${studentData.studentId}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">تاريخ الميلاد:</span>
-                            <span class="detail-value">${studentData.birthDate ? new Date(studentData.birthDate).toLocaleDateString('ar-EG') : 'غير محدد'}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">ولي الأمر:</span>
-                            <span class="detail-value">${studentData.parentName || 'غير محدد'}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">هاتف ولي الأمر:</span>
-                            <span class="detail-value">${studentData.parentPhone || 'غير محدد'}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">السنة الدراسية:</span>
-                            <span class="detail-value">${getAcademicYearName(studentData.academicYear) || 'غير محدد'}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">تاريخ التسجيل:</span>
-                            <span class="detail-value">${new Date(studentData.registrationDate || new Date()).toLocaleDateString('ar-EG')}</span>
-                        </div>
-                    </div>
-                    
-                    <div class="amount-section">
-                        <h3>المبلغ المدفوع</h3>
-                        <div class="amount">${amount} دينار جزائري</div>
-                        <p>(${convertNumberToArabicWords(amount)} ديناراً فقط لا غير)</p>
-                    </div>
-                    
-                    <div class="barcode">
-                        <svg id="barcode"></svg>
-                    </div>
-                    
-                    <div class="signature">
-                        <div class="signature-line">توقيع المسؤول</div>
-                        <div class="signature-line">توقيع ولي الأمر</div>
-                    </div>
-                    
-                    <div class="footer">
-                        <p>شكراً لثقتكم بنا - نتمنى لطالبنا النجاح والتوفيق</p>
-                        <p>للاستفسار: 1234567890 - info@school.com</p>
-                    </div>
-                </div>
-                
-                <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-                <script>
-                    JsBarcode("#barcode", "${studentData.studentId}", {
-                        format: "CODE128",
-                        lineColor: "#2c3e50",
-                        width: 1.5,
-                        height: 50,
-                        displayValue: true,
-                        fontSize: 12,
-                        margin: 5
-                    });
-                    
-                    window.onload = function() {
-                        setTimeout(function() {
-                            window.print();
-                            setTimeout(function() {
-                                window.close();
-                            }, 500);
-                        }, 500);
-                    };
-                </script>
-            </body>
-            </html>
-        `);
-        doc.close();
-        
-        iframe.contentWindow.onafterprint = function() {
-            document.body.removeChild(iframe);
-            resolve();
-        };
-    });
+        return true;
+    } catch (error) {
+        console.error('فشل الطباعة:', error);
+        // استخدام البديل الاحتياطي
+        await PrinterService.printFallbackRegistrationReceipt(studentData, amount);
+        return false;
+    }
 }
+
+
 function simulateCardScan() {
     setInterval(() => {
       if (Math.random() > 0.7) { // 30% chance to detect a card
@@ -8931,9 +8755,9 @@ async function printAttendanceSheet(liveClassId) {
                 <div class="page">
                     <div class="header">
                         <div class="header-left">
-                            <img src="assets/almarkaz.svg" alt="شعار المدرسة" class="school-logo">
+                            <img src="assets/rouad.JPG" alt="شعار المدرسة" class="school-logo">
                             <div class="school-info">
-                                <div class="school-name">${liveClass.class.school?.name || 'المركز الجزائري للعبقرية'}</div>
+                                <div class="school-name">${liveClass.class.school?.name || 'أكادمية الرواد للتعليم و المعارف'}</div>
                                 <div class="document-title">كشف الحضور والغياب</div>
                             </div>
                         </div>
