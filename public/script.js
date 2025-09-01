@@ -2630,180 +2630,447 @@ document.getElementById('enrollStudentSelect').innerHTML = `
 };
 
 
-
-window.showClassStudents = async function(classId) {
+window.showClassStudents = async function(classId, selectedMonth = null, viewMode = 'all') {
     try {
-      // Show loading animation
-      Swal.fire({
-        title: 'جاري التحميل...',
-        html: '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>',
-        allowOutsideClick: false,
-        showConfirmButton: false
-      });
-  
-      // Ensure classId is a string
-      classId = typeof classId === 'object' ? classId._id : classId;
-      
-      // Fetch class data
-      const classResponse = await fetch(`/api/classes/${classId}`, {
-        headers: getAuthHeaders()
-      });
-      
-      const classObj = await classResponse.json();
-      
-      // Fetch students data
-      const students = await Promise.all(
-        classObj.students.map(studentId => {
-          const id = typeof studentId === 'object' ? studentId._id : studentId;
-          return fetch(`/api/students/${id}`, {
-            headers: getAuthHeaders()
-          }).then(res => res.json())
-        })
-      );
-      
-      // Fetch payments data
-      const paymentsResponse = await fetch(`/api/payments?class=${classId}`, {
-        headers: getAuthHeaders()
-      });
-      
-      const payments = await paymentsResponse.json();
-  
-      // Create HTML template with enhanced styling
-      const studentsHtml = `
-      <div class="student-management-container">
-        <div class="class-header bg-primary text-white p-4 rounded mb-4">
-          <div class="d-flex justify-content-between align-items-center">
-            <div>
-              <h3 class="mb-1">${classObj.name}</h3>
-              <p class="mb-0">${classObj.subject} - ${getAcademicYearName(classObj.academicYear)}</p>
-              ${(!classObj.academicYear || classObj.academicYear === 'NS' || classObj.academicYear === 'غير محدد') ? 
-                '<p class="mb-0"><small>هذه الحصة متاحة لجميع المستويات</small></p>' : ''}
-            </div>
-            <button class="btn btn-success" onclick="showEnrollStudentModal('${classId}')">
-              <i class="bi bi-plus-lg me-1"></i> تسجيل طالب جديد
-            </button>
-          </div>
-        </div>
+        // Show loading animation
+        Swal.fire({
+            title: 'جاري التحميل...',
+            html: '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>',
+            allowOutsideClick: false,
+            showConfirmButton: false
+        });
+
+        // Ensure classId is a string
+        classId = typeof classId === 'object' ? classId._id : classId;
         
-        ${students.length > 0 ? students.map((student, index) => {
-          const studentPayments = payments.filter(p => p.student && p.student._id === student._id);
-          
-          return `
-          <div class="student-item card mb-4 shadow-sm" style="animation-delay: ${index * 0.1}s">
-            <div class="card-header d-flex justify-content-between align-items-center">
-              <h5 class="mb-0">${student.name} <small class="text-muted">(${student.studentId})</small></h5>
-              <div>
-                <button class="btn btn-sm btn-info me-2" onclick="printRegistrationReceipt(${JSON.stringify(student)}, 600)">
-                  <i class="bi bi-printer me-1"></i> طباعة الإيصال
-                </button>
-                <button class="btn btn-sm btn-danger" onclick="unenrollStudent('${classId}', '${student._id}')">
-                  <i class="bi bi-trash me-1"></i> إزالة من الحصة
-                </button>
-              </div>
+        // Fetch class data
+        const classResponse = await fetch(`/api/classes/${classId}`, {
+            headers: getAuthHeaders()
+        });
+        
+        const classObj = await classResponse.json();
+        
+        // Fetch students data
+        const students = await Promise.all(
+            classObj.students.map(studentId => {
+                const id = typeof studentId === 'object' ? studentId._id : studentId;
+                return fetch(`/api/students/${id}`, {
+                    headers: getAuthHeaders()
+                }).then(res => res.json())
+            })
+        );
+        
+        // Filter out students with status 'rejected'
+        const activeStudents = students.filter(student => 
+            student.status !== 'rejected' && student.status !== 'pending'
+        );
+
+        // Fetch payments data with optional month filter
+        let paymentsUrl = `/api/payments?class=${classId}`;
+        if (selectedMonth) {
+            paymentsUrl += `&month=${selectedMonth}`;
+        }
+        
+        const paymentsResponse = await fetch(paymentsUrl, {
+            headers: getAuthHeaders()
+        });
+        
+        const payments = await paymentsResponse.json();
+
+        // Create month selector
+        const currentDate = new Date();
+        const months = [];
+        for (let i = 0; i < 12; i++) {
+            const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+            const monthStr = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+            const monthName = date.toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' });
+            months.push({ value: monthStr, name: monthName });
+        }
+
+        // View mode selector
+        const viewModeSelectorHtml = `
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <label for="monthFilter" class="form-label">تصفية حسب الشهر:</label>
+                    <select id="monthFilter" class="form-select" onchange="filterPaymentsByMonth('${classId}', this.value, '${viewMode}')">
+                        <option value="">جميع الأشهر</option>
+                        ${months.map(month => `
+                            <option value="${month.value}" ${selectedMonth === month.value ? 'selected' : ''}>
+                                ${month.name}
+                            </option>
+                        `).join('')}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="viewMode" class="form-label">طريقة العرض:</label>
+                    <select id="viewMode" class="form-select" onchange="changeViewMode('${classId}', '${selectedMonth}', this.value)">
+                        <option value="all" ${viewMode === 'all' ? 'selected' : ''}>عرض الكل (مع المدفوعات)</option>
+                        <option value="studentsOnly" ${viewMode === 'studentsOnly' ? 'selected' : ''}>عرض الطلاب فقط</option>
+                        <option value="paymentsOnly" ${viewMode === 'paymentsOnly' ? 'selected' : ''}>عرض المدفوعات فقط</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <div class="d-flex align-items-end h-100">
+                        <button class="btn btn-outline-primary me-2" onclick="exportPaymentsToExcel('${classId}', '${selectedMonth}')">
+                            <i class="bi bi-file-earmark-excel me-1"></i> تصدير للإكسل
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="printStudentsList('${classId}')">
+                            <i class="bi bi-printer me-1"></i> طباعة القائمة
+                        </button>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-              <div class="student-info mb-3">
-                <div class="d-flex align-items-center mb-2">
-                  <i class="bi bi-person-badge me-2"></i>
-                  <span>ولي الأمر: ${student.parentName || 'غير مسجل'}</span>
+        `;
+
+        // Render based on view mode
+        let contentHtml = '';
+        
+        if (viewMode === 'studentsOnly') {
+            // عرض الطلاب فقط
+            contentHtml = `
+                <div class="students-only-view">
+                    <div class="card">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0">قائمة الطلاب - ${classObj.name}</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>رقم الطالب</th>
+                                            <th>اسم الطالب</th>
+                                            <th>ولي الأمر</th>
+                                            <th>هاتف ولي الأمر</th>
+                                            <th>الصف الدراسي</th>
+                                            <th>الإجراءات</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${activeStudents.map((student, index) => `
+                                            <tr>
+                                                <td>${index + 1}</td>
+                                                <td>${student.studentId || 'غير محدد'}</td>
+                                                <td>${student.name}</td>
+                                                <td>${student.parentName || 'غير مسجل'}</td>
+                                                <td>${student.parentPhone || 'غير مسجل'}</td>
+                                                <td>${getAcademicYearName(student.academicYear) || 'غير محدد'}</td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-info me-1" onclick="showStudentDetails('${student._id}')">
+                                                        <i class="bi bi-eye"></i>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-danger" onclick="unenrollStudent('${classId}', '${student._id}')">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <div class="mt-3 text-center">
+                                <p class="text-muted">إجمالي عدد الطلاب: <strong>${activeStudents.length}</strong></p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="d-flex align-items-center">
-                  <i class="bi bi-telephone me-2"></i>
-                  <span>${student.parentPhone || 'غير مسجل'}</span>
+            `;
+        } else if (viewMode === 'paymentsOnly') {
+            // عرض المدفوعات فقط
+            const paidPayments = payments.filter(p => p.status === 'paid');
+            const pendingPayments = payments.filter(p => p.status === 'pending');
+            
+            contentHtml = `
+                <div class="payments-only-view">
+                    <div class="card">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">إدارة المدفوعات - ${classObj.name}</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>اسم الطالب</th>
+                                            <th>رقم الطالب</th>
+                                            <th>الشهر</th>
+                                            <th>المبلغ</th>
+                                            <th>الحالة</th>
+                                            <th>تاريخ الدفع</th>
+                                            <th>الإجراءات</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${payments.map(payment => `
+                                            <tr>
+                                                <td>${payment.student?.name || 'غير معروف'}</td>
+                                                <td>${payment.student?.studentId || 'غير معروف'}</td>
+                                                <td>${payment.month}</td>
+                                                <td>${payment.amount} د.ك</td>
+                                                <td>
+                                                    <span class="badge ${payment.status === 'paid' ? 'bg-success' : 
+                                                                    payment.status === 'pending' ? 'bg-warning' : 'bg-danger'}">
+                                                        ${payment.status === 'paid' ? 'مسدد' : 
+                                                        payment.status === 'pending' ? 'قيد الانتظار' : 'متأخر'}
+                                                    </span>
+                                                </td>
+                                                <td>${payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('ar-EG') : '-'}</td>
+                                                <td>
+                                                    <button class="btn btn-sm ${payment.status !== 'paid' ? 'btn-success' : 'btn-secondary'}" 
+                                                        onclick="showPaymentModal('${payment._id}')" 
+                                                        ${payment.status === 'paid' ? 'disabled' : ''}>
+                                                        <i class="bi ${payment.status !== 'paid' ? 'bi-cash' : 'bi-check2'}"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <div class="row mt-4">
+                                <div class="col-md-4 text-center">
+                                    <div class="card bg-success text-white">
+                                        <div class="card-body">
+                                            <h6>المسدد</h6>
+                                            <h4>${paidPayments.reduce((sum, p) => sum + p.amount, 0)} د.ك</h4>
+                                            <small>${paidPayments.length} عملية</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 text-center">
+                                    <div class="card bg-warning text-dark">
+                                        <div class="card-body">
+                                            <h6>المعلق</h6>
+                                            <h4>${pendingPayments.reduce((sum, p) => sum + p.amount, 0)} د.ك</h4>
+                                            <small>${pendingPayments.length} عملية</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 text-center">
+                                    <div class="card bg-primary text-white">
+                                        <div class="card-body">
+                                            <h6>الإجمالي</h6>
+                                            <h4>${payments.reduce((sum, p) => sum + p.amount, 0)} د.ك</h4>
+                                            <small>${payments.length} عملية</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-              </div>
-              
-              <h6 class="text-muted mb-3">حالة المدفوعات:</h6>
-              
-              ${studentPayments.length > 0 ? `
-                <div class="table-responsive">
-                  <table class="table table-striped table-hover">
-                    <thead class="table-dark">
-                      <tr>
-                        <th>إجراء</th>
-                        <th>الحالة</th>
-                        <th>المبلغ</th>
-                        <th>الشهر</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      ${studentPayments.map(payment => `
-                        <tr>
-                          <td>
-                            <button class="btn btn-sm ${payment.status !== 'paid' ? 'btn-success' : 'btn-secondary'}" 
-                              onclick="showPaymentModal('${payment._id}')" 
-                              ${payment.status === 'paid' ? 'disabled' : ''}>
-                              <i class="bi ${payment.status !== 'paid' ? 'bi-cash' : 'bi-check2'} me-1"></i>
-                              ${payment.status !== 'paid' ? 'تسديد' : 'مسدد'}
-                            </button>
-                          </td>
-                          <td>
-                            <span class="badge ${payment.status === 'paid' ? 'bg-success' : 
-                                            payment.status === 'pending' ? 'bg-warning' : 'bg-danger'}">
-                              ${payment.status === 'paid' ? 'مسدد' : 
-                              payment.status === 'pending' ? 'قيد الانتظار' : 'متأخر'}
-                            </span>
-                          </td>
-                          <td>${payment.amount} د.ك</td>
-                          <td>${payment.month}</td>
-                        </tr>
-                      `).join('')}
-                    </tbody>
-                  </table>
+            `;
+        } else {
+            // العرض الافتراضي (الكل)
+            contentHtml = `
+                ${activeStudents.length > 0 ? activeStudents.map((student, index) => {
+                    const studentPayments = payments.filter(p => p.student && p.student._id === student._id);
+                    const totalPaid = studentPayments.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0);
+                    const totalPending = studentPayments.filter(p => p.status === 'pending').reduce((sum, p) => sum + p.amount, 0);
+                    
+                    return `
+                    <div class="student-item card mb-4 shadow-sm" style="animation-delay: ${index * 0.1}s">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">${student.name} <small class="text-muted">(${student.studentId})</small></h5>
+                            <div>
+                                <span class="badge ${totalPending === 0 ? 'bg-success' : 'bg-warning'} me-2">
+                                    ${totalPending === 0 ? 'مسدد بالكامل' : `متأخر: ${totalPending} د.ك`}
+                                </span>
+                                <button class="btn btn-sm btn-info me-2" onclick="printRegistrationReceipt(${JSON.stringify(student)}, 600)">
+                                    <i class="bi bi-printer me-1"></i> طباعة
+                                </button>
+                                <button class="btn btn-sm btn-danger" onclick="unenrollStudent('${classId}', '${student._id}')">
+                                    <i class="bi bi-trash me-1"></i> إزالة
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="student-info mb-3">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <p><strong>ولي الأمر:</strong> ${student.parentName || 'غير مسجل'}</p>
+                                        <p><strong>هاتف ولي الأمر:</strong> ${student.parentPhone || 'غير مسجل'}</p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <p><strong>الصف الدراسي:</strong> ${getAcademicYearName(student.academicYear) || 'غير محدد'}</p>
+                                        <p><strong>تاريخ التسجيل:</strong> ${new Date(student.registrationDate).toLocaleDateString('ar-EG')}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <h6 class="text-muted mb-3">حالة المدفوعات:</h6>
+                            
+                            ${studentPayments.length > 0 ? `
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <thead class="table-dark">
+                                            <tr>
+                                                <th>الشهر</th>
+                                                <th>المبلغ</th>
+                                                <th>الحالة</th>
+                                                <th>تاريخ الدفع</th>
+                                                <th>إجراء</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${studentPayments.map(payment => `
+                                                <tr>
+                                                    <td>${payment.month}</td>
+                                                    <td>${payment.amount} د.ك</td>
+                                                    <td>
+                                                        <span class="badge ${payment.status === 'paid' ? 'bg-success' : 
+                                                                        payment.status === 'pending' ? 'bg-warning' : 'bg-danger'}">
+                                                            ${payment.status === 'paid' ? 'مسدد' : 
+                                                            payment.status === 'pending' ? 'قيد الانتظار' : 'متأخر'}
+                                                        </span>
+                                                    </td>
+                                                    <td>${payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('ar-EG') : '-'}</td>
+                                                    <td>
+                                                        <button class="btn btn-sm ${payment.status !== 'paid' ? 'btn-success' : 'btn-secondary'}" 
+                                                            onclick="showPaymentModal('${payment._id}')" 
+                                                            ${payment.status === 'paid' ? 'disabled' : ''}>
+                                                            <i class="bi ${payment.status !== 'paid' ? 'bi-cash' : 'bi-check2'}"></i>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ` : `
+                                <div class="alert alert-info text-center">
+                                    <i class="bi bi-info-circle me-2"></i>
+                                    لا توجد مدفوعات مسجلة لهذا الطالب
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                    `;
+                }).join('') : `
+                <div class="alert alert-warning text-center">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    لا يوجد طلاب مسجلين في هذه الحصة
                 </div>
-              ` : `
-                <div class="empty-state text-center p-4 bg-light rounded">
-                  <i class="bi bi-wallet2 text-muted" style="font-size: 2.5rem;"></i>
-                  <p class="mt-2 mb-0">لا توجد مدفوعات مسجلة لهذا الطالب</p>
+                `}
+
+                ${activeStudents.length > 0 ? `
+                    <div class="card mt-4">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">ملخص المدفوعات</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3 text-center">
+                                    <h6>عدد الطلاب</h6>
+                                    <h3 class="text-primary">${activeStudents.length}</h3>
+                                </div>
+                                <div class="col-md-3 text-center">
+                                    <h6>المسدد</h6>
+                                    <h3 class="text-success">${payments.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0)} د.ك</h3>
+                                </div>
+                                <div class="col-md-3 text-center">
+                                    <h6>المعلق</h6>
+                                    <h3 class="text-warning">${payments.filter(p => p.status === 'pending').reduce((sum, p) => sum + p.amount, 0)} د.ك</h3>
+                                </div>
+                                <div class="col-md-3 text-center">
+                                    <h6>الإجمالي</h6>
+                                    <h3 class="text-dark">${payments.reduce((sum, p) => sum + p.amount, 0)} د.ك</h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ` : ''}
+            `;
+        }
+
+        // Create HTML template
+        const studentsHtml = `
+        <div class="student-management-container">
+            <div class="class-header bg-primary text-white p-4 rounded mb-4">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3 class="mb-1">${classObj.name}</h3>
+                        <p class="mb-0">${classObj.subject} - ${getAcademicYearName(classObj.academicYear)}</p>
+                        ${selectedMonth ? `<p class="mb-0">شهر: ${months.find(m => m.value === selectedMonth)?.name || selectedMonth}</p>` : ''}
+                        ${viewMode === 'studentsOnly' ? `<p class="mb-0"><i class="bi bi-people"></i> عرض الطلاب فقط</p>` : ''}
+                        ${viewMode === 'paymentsOnly' ? `<p class="mb-0"><i class="bi bi-cash"></i> عرض المدفوعات فقط</p>` : ''}
+                    </div>
+                    <button class="btn btn-success" onclick="showEnrollStudentModal('${classId}')">
+                        <i class="bi bi-plus-lg me-1"></i> تسجيل طالب جديد
+                    </button>
                 </div>
-              `}
             </div>
-          </div>
-          `;
-        }).join('') : `
-        <div class="empty-state text-center p-5 bg-light rounded">
-          <i class="bi bi-people text-muted" style="font-size: 3rem;"></i>
-          <h5 class="mt-3">لا يوجد طلاب مسجلين في هذه الحصة</h5>
-          <p class="text-muted">يمكنك تسجيل طلاب جديدين باستخدام زر "تسجيل طالب جديد" بالأعلى</p>
+            
+            ${viewModeSelectorHtml}
+            
+            ${contentHtml}
         </div>
-        `}
-      </div>
-      `;
-      
-      // Show the modal with all student data
-      Swal.fire({
-        title: `إدارة طلاب الحصة`,
-        html: studentsHtml,
-        width: '900px',
-        showConfirmButton: false,
-        showCloseButton: true,
-        customClass: {
-          popup: 'animate__animated animate__fadeInUp'
-        },
-        willOpen: () => {
-          // Add animation to student items after they're rendered
-          setTimeout(() => {
-            const items = document.querySelectorAll('.student-item');
-            items.forEach(item => {
-              item.style.opacity = '1';
-            });
-          }, 100);
-        }
-      });
-  
+        `;
+        
+        // Show the modal with all student data
+        Swal.fire({
+            title: `إدارة طلاب الحصة`,
+            html: studentsHtml,
+            width: '1200px',
+            showConfirmButton: false,
+            showCloseButton: true,
+            customClass: {
+                popup: 'animate__animated animate__fadeInUp'
+            }
+        });
+
     } catch (err) {
-      console.error('Error:', err);
-      Swal.fire({
-        icon: 'error',
-        title: 'خطأ',
-        text: 'حدث خطأ أثناء جلب بيانات الطلاب',
-        confirmButtonText: 'حسناً',
-        customClass: {
-          popup: 'animate__animated animate__headShake'
-        }
-      });
+        console.error('Error:', err);
+        Swal.fire({
+            icon: 'error',
+            title: 'خطأ',
+            text: 'حدث خطأ أثناء جلب بيانات الطلاب',
+            confirmButtonText: 'حسناً'
+        });
     }
-  };
+};
+
+// دالة لتغيير طريقة العرض
+window.changeViewMode = function(classId, month, viewMode) {
+    showClassStudents(classId, month || null, viewMode);
+};
+
+// دالة لتصفية المدفوعات حسب الشهر
+window.filterPaymentsByMonth = function(classId, month, viewMode) {
+    showClassStudents(classId, month || null, viewMode || 'all');
+};
+
+// دالة لطباعة قائمة الطلاب
+window.printStudentsList = function(classId) {
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html dir="rtl">
+        <head>
+            <title>قائمة الطلاب</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+                th { background-color: #f8f9fa; }
+                h2 { text-align: center; margin-bottom: 20px; }
+            </style>
+        </head>
+        <body>
+            <h2>قائمة الطلاب</h2>
+            <div id="content"></div>
+        </body>
+        </html>
+    `);
+    
+    // سيتم ملء المحتوى عبر JavaScript
+    printWindow.document.close();
+    printWindow.print();
+};
+
 
 // Helper function to show payment modal
 window.showPaymentModal = async function(paymentId) {
@@ -2904,6 +3171,48 @@ Swal.fire({
 });
 }
 };
+
+// دالة لتصفية المدفوعات حسب الشهر
+window.filterPaymentsByMonth = function(classId, month) {
+    showClassStudents(classId, month || null);
+};
+
+// دالة لتصدير البيانات إلى Excel
+window.exportPaymentsToExcel = async function(classId, month = null) {
+    try {
+        // جلب البيانات من الخادم
+        let url = `/api/payments/export?class=${classId}`;
+        if (month) {
+            url += `&month=${month}`;
+        }
+
+        const response = await fetch(url, {
+            headers: getAuthHeaders()
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            
+            // إنشاء ملف Excel
+            const worksheet = XLSX.utils.json_to_sheet(data);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "المدفوعات");
+            
+            // حفظ الملف
+            const fileName = `مدفوعات_الحصة_${classId}_${month || 'جميع_الأشهر'}.xlsx`;
+            XLSX.writeFile(workbook, fileName);
+            
+            Swal.fire('نجاح', 'تم تصدير البيانات بنجاح', 'success');
+        } else {
+            throw new Error('فشل في تصدير البيانات');
+        }
+    } catch (err) {
+        console.error('Error exporting to Excel:', err);
+        Swal.fire('خطأ', 'حدث خطأ أثناء تصدير البيانات', 'error');
+    }
+};
+
+
 
 // Helper function to show student enrollment modal
 window.showEnrollStudentModal = async function(classId) {
