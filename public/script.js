@@ -1239,41 +1239,14 @@ async function loadClasses() {
         }
         
         const classes = await response.json();
-        console.log(classes); // تحقق من وجود academicYear في البيانات
-
-        const tableBody = document.getElementById('classesTable');
-        tableBody.innerHTML = '';
+        updateClassesTable(classes);
         
-        classes.forEach((cls, index) => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${index + 1}</td>
-                <td>${cls.name}</td>
-                <td>${cls.subject || '-'}</td>
-                <td>${getAcademicYearName(cls.academicYear) || 'غير محدد'}</td>
-                <td>${cls.teacher?.name || 'غير معين'}</td>
-                <td>${cls.students?.length || 0}</td>
-                <td>
-                    <button class="btn btn-sm btn-outline-primary btn-action" onclick="editClass('${cls._id}')">
-                        <i class="bi bi-pencil"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteClass('${cls._id}')">
-                        <i class="bi bi-trash"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-success btn-action" onclick="showClassStudents('${cls._id}')">
-                        <i class="bi bi-people"></i>
-                    </button>
-                </td>
-            `;
-            tableBody.appendChild(row);
-        });
-        
-        document.getElementById('classesCount').textContent = classes.length;
     } catch (err) {
         console.error('Error loading classes:', err);
         Swal.fire('خطأ', 'حدث خطأ أثناء تحميل بيانات الحصص', 'error');
     }
 }
+
 
 async function loadClassrooms() {
     try {
@@ -1892,7 +1865,7 @@ function getAcademicYearName(code) {
 document.getElementById('saveStudentBtn').addEventListener('click', async () => {
     const studentData = {
         name: document.getElementById('studentName').value,
-        studentId: document.getElementById('studentId').value,
+        studentId: 'STU-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
         birthDate: document.getElementById('birthDate').value,
         parentName: document.getElementById('parentName').value,
         parentPhone: document.getElementById('parentPhone').value,
@@ -4400,10 +4373,27 @@ function startAttendanceBackgroundService() {
 
 // بدء الخدمة عند تحميل التطبيق
 document.addEventListener('DOMContentLoaded', function() {
-    if (currentUser) {
-        startAttendanceBackgroundService();
+    const classSearchInput = document.getElementById('classSearchInput');
+    if (classSearchInput) {
+        // البحث أثناء الكتابة (بعد تأخير 300 مللي ثانية)
+        let searchTimeout;
+        classSearchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                searchClasses();
+            }, 300);
+        });
+        
+        // البحث عند الضغط على Enter
+        classSearchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchClasses();
+            }
+        });
     }
 });
+
+
 
 async function cancelLiveClass(liveClassId) {
 try {
@@ -6739,28 +6729,349 @@ document.getElementById('connectRFIDBtn').addEventListener('click', function() {
     document.getElementById('disconnectRFIDBtn').disabled = true;
     document.getElementById('rfid-result').innerHTML = '<p class="text-muted">قم بتمرير بطاقة الطالب لعرض المعلومات</p>';
   });
-
-
-
-async function printRegistrationReceipt(studentData, amount = 600) {
-    try {
-        // استخدام نظام الطباعة الجديد
-        const canvas = await PrinterService.createRegistrationCanvas(studentData, amount);
-        const escposData = await PrinterService.canvasToEscPos(canvas);
-        
-        await PrinterService.connectToSerialPrinter();
-        await PrinterService.sendToPrinter(escposData);
-        await PrinterService.disconnect();
-        
-        return true;
-    } catch (error) {
-        console.error('فشل الطباعة:', error);
-        // استخدام البديل الاحتياطي
-        await PrinterService.printFallbackRegistrationReceipt(studentData, amount);
-        return false;
-    }
+  function showAllClasses() {
+    document.getElementById('classSearchInput').value = '';
+    loadClasses();
+    document.getElementById('showAllClassesBtn').style.display = 'none';
 }
 
+  async function searchClasses() {
+    const searchTerm = document.getElementById('classSearchInput').value.trim().toLowerCase();
+    const showAllBtn = document.getElementById('showAllClassesBtn');
+    
+    if (searchTerm) {
+        showAllBtn.style.display = 'block';
+    } else {
+        showAllBtn.style.display = 'none';
+    }
+    
+    try {
+        const response = await fetch('/api/classes', {
+            headers: getAuthHeaders()
+        });
+        
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+        
+        const classes = await response.json();
+        
+        // تصفية الحصص بناءً على مصطلح البحث
+        const filteredClasses = classes.filter(cls => {
+            // إذا كان مصطلح البحث فارغاً، اعرض جميع الحصص
+            if (!searchTerm) return true;
+            
+            // التحقق إذا كان مصطلح البحث يطابق أي خاصية من خصائص الحصة
+            return (
+                (cls.name && cls.name.toLowerCase().includes(searchTerm)) ||
+                (cls.subject && cls.subject.toLowerCase().includes(searchTerm)) ||
+                (cls.academicYear && getAcademicYearName(cls.academicYear).toLowerCase().includes(searchTerm)) ||
+                (cls.teacher?.name && cls.teacher.name.toLowerCase().includes(searchTerm)) ||
+                (cls.description && cls.description.toLowerCase().includes(searchTerm))
+            );
+        });
+        
+        // تحديث الجدول بالنتائج المصفاة
+        updateClassesTable(filteredClasses);
+        
+    } catch (err) {
+        console.error('Error searching classes:', err);
+        Swal.fire('خطأ', 'حدث خطأ أثناء البحث', 'error');
+    }
+}
+function updateClassesTable(classes) {
+    const tableBody = document.getElementById('classesTable');
+    tableBody.innerHTML = '';
+    
+    if (classes.length === 0) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center py-4 text-muted">لا توجد نتائج مطابقة للبحث</td>
+            </tr>
+        `;
+        return;
+    }
+    
+    classes.forEach((cls, index) => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${index + 1}</td>
+            <td>${cls.name}</td>
+            <td>${cls.subject || '-'}</td>
+            <td>${getAcademicYearName(cls.academicYear) || 'غير محدد'}</td>
+            <td>${cls.teacher?.name || 'غير معين'}</td>
+            <td>${cls.students?.length || 0}</td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary btn-action" onclick="editClass('${cls._id}')">
+                    <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteClass('${cls._id}')">
+                    <i class="bi bi-trash"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-success btn-action" onclick="showClassStudents('${cls._id}')">
+                    <i class="bi bi-people"></i>
+                </button>
+            </td>
+        `;
+        tableBody.appendChild(row);
+    });
+    
+    document.getElementById('classesCount').textContent = classes.length;
+}
+
+
+  async function printRegistrationReceipt(studentData, amount = 600) {
+    return new Promise((resolve) => {
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+        
+        const doc = iframe.contentWindow.document;
+        
+        doc.open();
+        doc.write(`
+            <!DOCTYPE html>
+            <html lang="ar" dir="rtl">
+            <head>
+                <meta charset="UTF-8">
+                <title>إيصال تسجيل طالب</title>
+                <style>
+                    @page {
+                        size: A4;
+                        margin: 0;
+                    }
+                    body {
+                        width: 210mm;
+                        height: 297mm;
+                        margin: 0;
+                        padding: 0;
+                        font-family: 'Arial', sans-serif;
+                        color: #333;
+                        line-height: 1.6;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                    }
+                    .receipt-container {
+                        width: 150mm;
+                        height: auto;
+                        border: 2px solid #3498db;
+                        border-radius: 5px;
+                        padding: 10mm;
+                        box-sizing: border-box;
+                        position: relative;
+                        overflow: hidden;
+                        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+                    }
+                    .logo-container {
+                        background-color: #000;
+                        padding: 10px;
+                        border-radius: 5px;
+                        display: inline-block;
+                        margin-bottom: 15px;
+                    }
+                    .logo {
+                        height: 40px;
+                        filter: brightness(0) invert(1);
+                        
+                    }
+                    .header {
+                        text-align: center;
+                        margin-bottom: 15px;
+                        border-bottom: 2px solid #3498db;
+                        padding-bottom: 10px;
+                    }
+                    .title {
+                        color: #2c3e50;
+                        margin: 10px 0 5px;
+                        font-size: 20px;
+                    }
+                    .subtitle {
+                        color: #7f8c8d;
+                        font-size: 12px;
+                    }
+                    .receipt-details {
+                        margin: 15px 0;
+                    }
+                    .detail-row {
+                        display: flex;
+                        justify-content: space-between;
+                        margin-bottom: 10px;
+                        padding-bottom: 6px;
+                        border-bottom: 1px dashed #ddd;
+                        font-size: 12px;
+                    }
+                    .detail-label {
+                        font-weight: bold;
+                        color: #2c3e50;
+                        width: 40%;
+                    }
+                    .detail-value {
+                        color: #34495e;
+                        width: 60%;
+                        text-align: left;
+                    }
+                    .amount-section {
+                        background-color: #f8f9fa;
+                        padding: 10px;
+                        border-radius: 5px;
+                        margin: 15px 0;
+                        text-align: center;
+                        border: 1px solid #eee;
+                    }
+                    .amount {
+                        font-size: 22px;
+                        color: #e74c3c;
+                        font-weight: bold;
+                        margin: 5px 0;
+                    }
+                    .barcode {
+                        text-align: center;
+                        margin: 15px 0;
+                        padding: 8px;
+                        background-color: #f8f9fa;
+                        border-radius: 5px;
+                    }
+                    .footer {
+                        text-align: center;
+                        margin-top: 20px;
+                        font-size: 10px;
+                        color: #7f8c8d;
+                        border-top: 2px solid #3498db;
+                        padding-top: 8px;
+                    }
+                    .signature {
+                        display: flex;
+                        justify-content: space-between;
+                        margin-top: 30px;
+                    }
+                    .signature-line {
+                        border-top: 1px solid #333;
+                        width: 150px;
+                        text-align: center;
+                        padding-top: 5px;
+                        font-size: 10px;
+                    }
+                    .watermark {
+                        position: absolute;
+                        opacity: 0.05;
+                        font-size: 80px;
+                        color: #3498db;
+                        transform: rotate(-30deg);
+                        left: 50%;
+                        top: 50%;
+                        z-index: 0;
+                        font-weight: bold;
+                        pointer-events: none;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="receipt-container">
+                    <div class="watermark">${studentData.studentId}</div>
+                    
+                    <div class="header">
+                        <div class="logo-container">
+                            <img src="https://redoxcsl.web.app/assets/redox-icon.png" class="logo">
+                        </div>
+                        <h1 class="title">إيصال تسجيل طالب</h1>
+                        <p class="subtitle">${new Date().toLocaleDateString('ar-EG', { 
+                            weekday: 'long', 
+                            year: 'numeric', 
+                            month: 'long', 
+                            day: 'numeric' 
+                        })}</p>
+                    </div>
+                    
+                    <div class="receipt-details">
+                        <div class="detail-row">
+                            <span class="detail-label">رقم الإيصال:</span>
+                            <span class="detail-value">REG-${Date.now().toString().slice(-6)}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">اسم الطالب:</span>
+                            <span class="detail-value">${studentData.name}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">رقم الطالب:</span>
+                            <span class="detail-value">${studentData.studentId}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">تاريخ الميلاد:</span>
+                            <span class="detail-value">${studentData.birthDate ? new Date(studentData.birthDate).toLocaleDateString('ar-EG') : 'غير محدد'}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">ولي الأمر:</span>
+                            <span class="detail-value">${studentData.parentName || 'غير محدد'}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">هاتف ولي الأمر:</span>
+                            <span class="detail-value">${studentData.parentPhone || 'غير محدد'}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">السنة الدراسية:</span>
+                            <span class="detail-value">${getAcademicYearName(studentData.academicYear) || 'غير محدد'}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">تاريخ التسجيل:</span>
+                            <span class="detail-value">${new Date(studentData.registrationDate || new Date()).toLocaleDateString('ar-EG')}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="amount-section">
+                        <h3>المبلغ المدفوع</h3>
+                        <div class="amount">${amount} دينار جزائري</div>
+                        <p>(${convertNumberToArabicWords(amount)} ديناراً فقط لا غير)</p>
+                    </div>
+                    
+                    <div class="barcode">
+                        <svg id="barcode"></svg>
+                    </div>
+                    
+                    <div class="signature">
+                        <div class="signature-line">توقيع المسؤول</div>
+                        <div class="signature-line">توقيع ولي الأمر</div>
+                    </div>
+                    
+                    <div class="footer">
+                        <p>شكراً لثقتكم بنا - نتمنى لطالبنا النجاح والتوفيق</p>
+                        <p>للاستفسار: 1234567890 - info@school.com</p>
+                    </div>
+                </div>
+                
+                <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+                <script>
+                    JsBarcode("#barcode", "${studentData.studentId}", {
+                        format: "CODE128",
+                        lineColor: "#2c3e50",
+                        width: 1.5,
+                        height: 50,
+                        displayValue: true,
+                        fontSize: 12,
+                        margin: 5
+                    });
+                    
+                    window.onload = function() {
+                        setTimeout(function() {
+                            window.print();
+                            setTimeout(function() {
+                                window.close();
+                            }, 500);
+                        }, 500);
+                    };
+                </script>
+            </body>
+            </html>
+        `);
+        doc.close();
+        
+        iframe.contentWindow.onafterprint = function() {
+            document.body.removeChild(iframe);
+            resolve();
+        };
+    });
+}
 
 function simulateCardScan() {
     setInterval(() => {

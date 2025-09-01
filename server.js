@@ -878,6 +878,8 @@ app.post('/api/students', authenticate(['admin', 'secretary']), async (req, res)
   }
 });
 
+
+
 app.get('/api/students/:id', /* authenticate(['admin', 'secretary', 'accountant']),*/ async (req, res) => {
   try {
     const student = await Student.findById(req.params.id)

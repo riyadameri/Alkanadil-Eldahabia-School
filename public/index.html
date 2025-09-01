@@ -584,12 +584,13 @@
                         <!-- Dashboard Section -->
                         <div id="dashboard" class="content-section active">
                             <h2 class="mb-4"><i class="bi bi-speedometer2 me-2"></i>لوحة التحكم</h2>
-                            <h2>🧾 نظام الطباعة الحرارية</h2>
-                            <button id="connect">🔌 توصيل الطابعة</button>
-                            <button id="print-text">🖨️ طباعة نصية</button>
-                            <button id="print-canvas">🖨️ طباعة بالفاتورة (Canvas)</button>
-                            <canvas id="billCanvas" width="576" height="800" style="display:none"></canvas>
-                          
+                            <div class="d-flex justify-content-center align-items-center flex-column">
+                                <h2 style="font-family: 'Baloo Da 2', cursive; font-size: 3rem; margin-bottom: 1rem;">🧾 نظام الطباعة الحرارية</h2>
+                                <button id="connect" class="btn btn-outline-primary btn-lg" style="margin-bottom: 1rem; font-size: 1.5rem; font-weight: bold;">🔌 توصيل الطابعة</button>
+                                <button id="print-text" class="btn btn-outline-info btn-lg" style="margin-bottom: 1rem; font-size: 1.5rem; font-weight: bold;">🖨️ طباعة نصية</button>
+                                <button id="print-canvas" class="btn btn-outline-success btn-lg" style="margin-bottom: 1rem; font-size: 1.5rem; font-weight: bold;">🖨️ طباعة بالفاتورة (Canvas)</button>
+                                <canvas id="billCanvas" width="576" height="800" style="display:none; border: 1px solid #ccc;"></canvas>
+                            </div>
 
 
                             <!-- RFID Scanner Interface - Fixed at top -->
@@ -819,9 +820,23 @@
                         <div id="classes" class="content-section">
                             <div class="d-flex justify-content-between align-items-center mb-4 titlePro">
                                 <h2><i class="bi bi-book me-2"></i>إدارة الحصص</h2>
+                                <div class="d-flex">
+                                    <div class="input-group me-2" style="width: 300px;">
+                                        <input type="text" id="classSearchInput" class="form-control" placeholder="ابحث عن الحصة بالاسم...">
+                                        <button class="btn btn-outline-secondary" type="button" onclick="searchClasses()">
+                                            <i class="bi bi-search"></i>
+                                        </button>
+                                    </div>
+
+                                </div>
+                            
                                 <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addClassModal">
                                     <i class="bi bi-plus-lg me-1"></i>إضافة حصة
                                 </button>
+                                <!-- بعد حقل البحث -->
+<button class="btn btn-outline-secondary ms-2" id="showAllClassesBtn" style="display: none;" onclick="showAllClasses()">
+    عرض الكل
+</button>
                             </div>
                             <div class="table-responsive">
                                 <table class="table table-striped table-hover">
