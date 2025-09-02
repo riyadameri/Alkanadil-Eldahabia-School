@@ -20,17 +20,39 @@ let port, writer;
 // Connect to the thermal printer
 async function connectToThermalPrinter() {
     try {
+        // التحقق من دعم واجهة Web Serial API
+        if (!('serial' in navigator)) {
+            throw new Error('واجهة الطابعة غير مدعومة في هذا المتصفح');
+        }
+        
         port = await navigator.serial.requestPort();
         await port.open({ baudRate: 9600 });
         writer = port.writable.getWriter();
+        
+        // اختبار الاتصال بإرسال أمر تهيئة
+        const encoder = new TextEncoder();
+        await writer.write(encoder.encode('\x1B\x40')); // أمر تهيئة الطابعة
+        
         alert("✅ تم التوصيل بالطابعة بنجاح");
         return true;
     } catch (err) {
         console.error("Error connecting to printer:", err);
-        alert("❌ خطأ في الاتصال بالطابعة: " + err.message);
+        
+        let errorMessage = "❌ خطأ في الاتصال بالطابعة: ";
+        if (err.message.includes('permission')) {
+            errorMessage += "يجب منح الإذن للوصول إلى الطابعة";
+        } else if (err.message.includes('supported')) {
+            errorMessage += "هذه الميزة غير مدعومة في متصفحك. يرجى استخدام Chrome أو Edge";
+        } else {
+            errorMessage += err.message;
+        }
+        
+        alert(errorMessage);
         return false;
     }
 }
+
+
 
 // Print text to the thermal printer
 async function printTextToPrinter(text) {
@@ -53,37 +75,38 @@ async function printTextToPrinter(text) {
 // Draw a payment receipt on canvas
 function drawPaymentReceipt(paymentData) {
     const canvas = document.createElement("canvas");
-    canvas.width = 580; // Width for 80mm paper
-    canvas.height = 900; // Increased height to accommodate images
+    canvas.width = 580;
+    canvas.height = 900;
     
     const ctx = canvas.getContext("2d");
     
-    // Clear background
+    // الخلفية
     ctx.fillStyle = "#FFFFFF";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Draw school logo
+    // شعار المدرسة
     const logoImg = new Image();
     logoImg.src = 'assets/rouad.JPG';
     ctx.drawImage(logoImg, canvas.width - 100, 10, 80, 80);
     
-    // Draw header text
+    // العنوان الرئيسي بخط أكبر
     ctx.fillStyle = "#000000";
-    ctx.textAlign = "right";
-    ctx.font = "bold 28px Arial";
-    ctx.fillText("أكادمية الرواد للتعليم و المعارف", canvas.width - 110, 50);
+    ctx.textAlign = "center";
+    ctx.font = "bold 32px Arial";
+    ctx.fillText("أكاديمية الرواد للتعليم والمعارف", canvas.width / 2, 50);
     
-    ctx.font = "20px Arial";
-    ctx.fillText("إيصال دفع شهري", canvas.width - 110, 90);
+    ctx.font = "bold 24px Arial";
+    ctx.fillText("إيصال دفع شهري", canvas.width / 2, 90);
     
-    // Draw separator
+    // خط فاصل
     ctx.beginPath();
     ctx.moveTo(20, 120);
     ctx.lineTo(canvas.width - 20, 120);
     ctx.stroke();
     
-    // Draw payment details
-    ctx.font = "18px Arial";
+    // تفاصيل الدفع بخط أكبر
+    ctx.textAlign = "right";
+    ctx.font = "20px Arial";
     let yPosition = 160;
     
     ctx.fillText(`الطالب: ${paymentData.studentName}`, canvas.width - 20, yPosition);
@@ -107,7 +130,7 @@ function drawPaymentReceipt(paymentData) {
     ctx.fillText(`تاريخ الدفع: ${paymentData.paymentDate}`, canvas.width - 20, yPosition);
     yPosition += 35;
     
-    // Draw separator
+    // خط فاصل
     ctx.beginPath();
     ctx.moveTo(20, yPosition + 10);
     ctx.lineTo(canvas.width - 20, yPosition + 10);
@@ -115,22 +138,24 @@ function drawPaymentReceipt(paymentData) {
     
     yPosition += 40;
     
-    // Draw QR code
+    // رمز الاستجابة السريعة
     const qrImg = new Image();
     qrImg.src = 'assets/redox-qr.svg';
     ctx.drawImage(qrImg, canvas.width/2 - 50, yPosition, 100, 100);
     yPosition += 110;
     
-    // Draw footer
-    ctx.font = "16px Arial";
+    // تذييل بخط أكبر
+    ctx.font = "bold 22px Arial";
     ctx.textAlign = "center";
     ctx.fillText("شكراً لثقتكم بنا", canvas.width / 2, yPosition);
     yPosition += 30;
     
+    ctx.font = "20px Arial";
     ctx.fillText(paymentData.schoolContact, canvas.width / 2, yPosition);
     
     return canvas;
 }
+
 
 // Draw a signature receipt on canvas
 function drawSignatureReceipt(studentData, className, month) {
@@ -8180,7 +8205,7 @@ window.paySinglePayment = async function(paymentId) {
             const updatedPayment = await response.json();
             await printPaymentReceiptToThermalPrinter(updatedPayment);
             Swal.fire('نجاح', 'تم دفع الدفعة وطباعتها', 'success');
-            // إعادة تحميل التفاصيل
+            // إعادة تحميل التفاصيلz
             showStudentDetails(updatedPayment.student._id);
         } else {
             throw new Error('فشل في دفع الدفعة');
@@ -8190,8 +8215,6 @@ window.paySinglePayment = async function(paymentId) {
     }
 };
 
-// دفع وطباعة دفعات متعددة
-// دفع وطباعة دفعات متعددة
 // دفع وطباعة دفعات متعددة
 async function payAndPrintSelectedPayments(studentId) {
     try {
@@ -8235,22 +8258,61 @@ async function payAndPrintSelectedPayments(studentId) {
             }
         }
 
-        // طباعة الإيصالات
+        // طباعة الإيصال المتعدد
         if (paidPayments.length > 0) {
-            for (const payment of paidPayments) {
-                await printPaymentReceiptToThermalPrinter(payment);
-                // إضافة فاصل بين الإيصالات
-                if (writer) {
-                    await writer.write(new TextEncoder().encode('\n\n\n\n\n'));
-                }
-            }
-
-            Swal.fire({
-                icon: 'success',
-                title: 'تمت العملية بنجاح',
-                text: `تم دفع وطباعة ${paidPayments.length} دفعة بنجاح`,
-                confirmButtonText: 'حسناً'
+            // الحصول على بيانات الطالب
+            const studentResponse = await fetch(`/api/students/${studentId}`, {
+                headers: getAuthHeaders()
             });
+            
+            if (studentResponse.ok) {
+                const student = await studentResponse.json();
+                
+                // الحصول على معلومات إضافية عن الحصص
+                const paymentDetails = await Promise.all(
+                    paidPayments.map(async (p) => {
+                        // إذا كانت معلومات الحصة غير مكتملة، جلبها من الخادم
+                        if (!p.class || !p.class.name) {
+                            try {
+                                const classResponse = await fetch(`/api/classes/${p.class._id || p.class}`, {
+                                    headers: getAuthHeaders()
+                                });
+                                if (classResponse.ok) {
+                                    const classData = await classResponse.json();
+                                    p.class = classData;
+                                }
+                            } catch (err) {
+                                console.error('Error fetching class details:', err);
+                            }
+                        }
+                        
+                        return {
+                            className: p.class?.name || 'غير محدد',
+                            month: p.month,
+                            amount: p.amount
+                        };
+                    })
+                );
+                
+                // إعداد بيانات الإيصال المتعدد
+                const multiPaymentData = {
+                    studentName: student.name,
+                    studentId: student.studentId,
+                    payments: paymentDetails,
+                    paymentMethod: 'cash',
+                    schoolContact: "الهاتف: 0559581957 | البريد: info@redox.com"
+                };
+                
+                // طباعة الإيصال المتعدد
+                await printMultiPaymentReceipt(multiPaymentData);
+                
+                Swal.fire({
+                    icon: 'success',
+                    title: 'تمت العملية بنجاح',
+                    text: `تم دفع وطباعة ${paidPayments.length} دفعة بنجاح`,
+                    confirmButtonText: 'حسناً'
+                });
+            }
         } else {
             throw new Error('فشل في دفع أي من الدفعات المحددة');
         }
@@ -8268,6 +8330,417 @@ async function payAndPrintSelectedPayments(studentId) {
         });
     }
 }
+
+
+
+// Add error handling and retry logic
+async function printWithRetry(printFunction, maxRetries = 3) {
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        return await printFunction();
+      } catch (error) {
+        console.error(`Print attempt ${i + 1} failed:`, error);
+        if (i === maxRetries - 1) throw error;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+  }
+
+  // Create a unified RFID service
+const rfidService = {
+    buffer: '',
+    lastKeyTime: Date.now(),
+    
+    processInput: function(key) {
+      const currentTime = Date.now();
+      
+      // Reset buffer if too much time has passed
+      if (currentTime - this.lastKeyTime > 100) {
+        this.buffer = '';
+      }
+      
+      this.lastKeyTime = currentTime;
+      
+      if (key === 'Enter') {
+        this.processRFID(this.buffer);
+        this.buffer = '';
+      } else if (key >= '0' && key <= '9') {
+        this.buffer += key;
+      }
+    },
+    
+    processRFID: async function(uid) {
+      // Unified RFID processing logic
+    }
+  };
+  // Add payment validation
+function validatePayment(paymentData) {
+    const errors = [];
+    
+    if (!paymentData.amount || paymentData.amount <= 0) {
+      errors.push('المبلغ غير صالح');
+    }
+    
+    if (!paymentData.studentId) {
+      errors.push('يجب تحديد طالب');
+    }
+    
+    if (!paymentData.month) {
+      errors.push('يجب تحديد شهر');
+    }
+    
+    return errors;
+  }
+  // Add session timeout
+let inactivityTimer;
+
+function resetInactivityTimer() {
+  clearTimeout(inactivityTimer);
+  inactivityTimer = setTimeout(() => {
+    if (currentUser) {
+      Swal.fire({
+        title: 'انتهت الجلسة',
+        text: 'تم تسجيل الخروج بسبب عدم النشاط',
+        icon: 'warning'
+      }).then(() => {
+        logout();
+      });
+    }
+  }, 30 * 60 * 1000); // 30 minutes
+}
+
+// Reset timer on user activity
+document.addEventListener('mousemove', resetInactivityTimer);
+document.addEventListener('keypress', resetInactivityTimer);
+// Use document fragments for large table updates
+function renderLargeTable(data, renderRow) {
+    const fragment = document.createDocumentFragment();
+    
+    data.forEach((item, index) => {
+      const row = renderRow(item, index);
+      fragment.appendChild(row);
+    });
+    
+    tableBody.innerHTML = '';
+    tableBody.appendChild(fragment);
+  }
+  // Create error handling utility
+const errorHandler = {
+    showError: function(message, error) {
+      console.error(message, error);
+      
+      // Don't show technical errors to users in production
+      const userMessage = process.env.NODE_ENV === 'production' 
+        ? 'حدث خطأ، يرجى المحاولة مرة أخرى' 
+        : `${message}: ${error.message}`;
+      
+      Swal.fire('خطأ', userMessage, 'error');
+    },
+    
+    handleApiError: function(response) {
+      if (response.status === 401) {
+        logout();
+        return true;
+      }
+      return false;
+    }
+  };
+
+  // Generic modal form handler
+async function handleFormSubmit(formId, endpoint, method = 'POST', successMessage) {
+    const form = document.getElementById(formId);
+    const formData = new FormData(form);
+    
+    try {
+      const response = await fetch(endpoint, {
+        method,
+        headers: getAuthHeaders(),
+        body: JSON.stringify(Object.fromEntries(formData))
+      });
+      
+      if (response.ok) {
+        Swal.fire('نجاح', successMessage, 'success');
+        form.reset();
+        return true;
+      } else {
+        const error = await response.json();
+        throw new Error(error.error);
+      }
+    } catch (error) {
+      errorHandler.showError('حدث خطأ', error);
+      return false;
+    }
+  }
+
+  function drawMultiPaymentReceipt(paymentsData) {
+    const canvas = document.createElement("canvas");
+    
+    // حساب الارتفاع الديناميكي بناءً على عدد الحصص
+    const baseHeight = 600;
+    const tableHeight = paymentsData.payments.length * 40;
+    const qrCodeHeight = 120;
+    canvas.width = 580;
+    canvas.height = baseHeight + tableHeight + qrCodeHeight + 50;
+    
+    const ctx = canvas.getContext("2d");
+    
+    // الخلفية
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // شعار المدرسة
+    const logoImg = new Image();
+    logoImg.onload = function() {
+        // رسم الشعار في الأعلى
+        ctx.drawImage(logoImg, canvas.width - 100, 10, 80, 80);
+        drawReceiptContent(); // استدعاء باقي المحتوى بعد تحميل الصورة
+    };
+    logoImg.onerror = function() {
+        // إذا فشل تحميل الصورة، استمر بدونها
+        drawReceiptContent();
+    };
+    logoImg.src = 'assets/rouad.JPG';
+    
+    function drawReceiptContent() {
+        // العنوان الرئيسي بخط أكبر
+        ctx.fillStyle = "#000000";
+        ctx.textAlign = "center";
+        ctx.font = "bold 32px Arial";
+        ctx.fillText("أكاديمية الرواد للتعليم والمعارف", canvas.width / 2, 50);
+        
+        ctx.font = "bold 24px Arial";
+        ctx.fillText("إيصال دفع متعدد الحصص", canvas.width / 2, 90);
+        
+        // خط فاصل
+        ctx.beginPath();
+        ctx.moveTo(20, 110);
+        ctx.lineTo(canvas.width - 20, 110);
+        ctx.stroke();
+        
+        // معلومات الطالب
+        ctx.textAlign = "right";
+        ctx.font = "bold 20px Arial";
+        let yPosition = 150;
+        
+        ctx.fillText(`الطالب: ${paymentsData.studentName}`, canvas.width - 20, yPosition);
+        yPosition += 30;
+        
+        ctx.fillText(`رقم الطالب: ${paymentsData.studentId}`, canvas.width - 20, yPosition);
+        yPosition += 40;
+        
+        // عنوان قسم الحصص
+        ctx.font = "bold 22px Arial";
+        ctx.fillText("تفاصيل الحصص المدفوعة", canvas.width - 20, yPosition);
+        yPosition += 30;
+        
+        // جدول الحصص
+        const tableTop = yPosition;
+        const columnWidths = [200, 150, 150]; // عرض الأعمدة: اسم الحصة، الشهر، المبلغ
+        
+        // رأس الجدول
+        ctx.fillStyle = "#f8f9fa";
+        ctx.fillRect(20, tableTop, canvas.width - 40, 40);
+        
+        ctx.fillStyle = "#000000";
+        ctx.font = "bold 18px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("اسم الحصة", 20 + columnWidths[0]/2, tableTop + 25);
+        ctx.fillText("الشهر", 20 + columnWidths[0] + columnWidths[1]/2, tableTop + 25);
+        ctx.fillText("المبلغ", 20 + columnWidths[0] + columnWidths[1] + columnWidths[2]/2, tableTop + 25);
+        
+        // خط تحت رأس الجدول
+        ctx.beginPath();
+        ctx.moveTo(20, tableTop + 40);
+        ctx.lineTo(canvas.width - 20, tableTop + 40);
+        ctx.stroke();
+        
+        // محتوى الجدول
+        ctx.textAlign = "right";
+        ctx.font = "16px Arial";
+        let totalAmount = 0;
+        
+        paymentsData.payments.forEach((payment, index) => {
+            const rowY = tableTop + 40 + (index * 30);
+            
+            // تناوب ألوان الصفوف
+            if (index % 2 === 0) {
+                ctx.fillStyle = "#f8f9fa";
+                ctx.fillRect(20, rowY, canvas.width - 40, 30);
+            }
+            
+            ctx.fillStyle = "#000000";
+            // اسم الحصة والمادة
+            ctx.fillText(`${payment.className} (${payment.subject})`, 20 + columnWidths[0] - 10, rowY + 20);
+            
+            // الشهر
+            ctx.textAlign = "center";
+            ctx.fillText(payment.month || 'غير محدد', 20 + columnWidths[0] + columnWidths[1]/2, rowY + 20);
+            
+            // المبلغ
+            ctx.fillText(`${payment.amount} د.ج`, 20 + columnWidths[0] + columnWidths[1] + columnWidths[2] - 10, rowY + 20);
+            ctx.textAlign = "right";
+            
+            totalAmount += payment.amount;
+        });
+        
+        yPosition = tableTop + 40 + (paymentsData.payments.length * 30) + 20;
+        
+        // خط فوق المجموع
+        ctx.beginPath();
+        ctx.moveTo(20, yPosition - 10);
+        ctx.lineTo(canvas.width - 20, yPosition - 10);
+        ctx.stroke();
+        
+        // مسافة بين الجدول والمجموع
+        yPosition += 40;
+        
+        // المجموع
+        ctx.font = "bold 22px Arial";
+        ctx.fillText(`المبلغ الإجمالي: ${totalAmount} د.ج`, canvas.width - 20, yPosition);
+        yPosition += 30;
+        
+        // طريقة الدفع وتاريخه
+        ctx.font = "20px Arial";
+        ctx.fillText(`طريقة الدفع: ${getPaymentMethodName(paymentsData.paymentMethod)}`, canvas.width - 20, yPosition);
+        yPosition += 25;
+        ctx.fillText(`تاريخ الطباعة: ${new Date().toLocaleDateString('ar-EG')}`, canvas.width - 20, yPosition);
+        yPosition += 40;
+        
+        // رمز الاستجابة السريعة (QR Code) - أكبر حجماً
+        const qrImg = new Image();
+        qrImg.onload = function() {
+            const qrSize = 100;
+            const qrX = (canvas.width - qrSize) / 2;
+            ctx.drawImage(qrImg, qrX, yPosition, qrSize, qrSize);
+            yPosition += qrSize + 20;
+            
+            // تذييل بخط أكبر
+            ctx.textAlign = "center";
+            ctx.font = "bold 22px Arial";
+            ctx.fillText("شكراً لثقتكم بنا", canvas.width / 2, yPosition);
+            yPosition += 30;
+            
+            ctx.font = "20px Arial";
+            ctx.fillText(paymentsData.schoolContact, canvas.width / 2, yPosition);
+        };
+        qrImg.onerror = function() {
+            // إذا فشل تحميل صورة QR، اطبع بديل نصي
+            ctx.textAlign = "center";
+            ctx.font = "bold 22px Arial";
+            ctx.fillText("شكراً لثقتكم بنا", canvas.width / 2, yPosition);
+            yPosition += 30;
+            
+            ctx.font = "20px Arial";
+            ctx.fillText(paymentsData.schoolContact, canvas.width / 2, yPosition);
+        };
+        qrImg.src = 'assets/redox-qr.svg';
+    }
+    
+    return canvas;
+}
+
+function getPaymentMethodName(method) {
+    const methods = {
+        'cash': 'نقدي',
+        'bank': 'حوالة بنكية',
+        'online': 'دفع إلكتروني',
+        'card': 'بطاقة ائتمان'
+    };
+    
+    return methods[method] || method;
+}
+
+async function printMultiPaymentReceipt(paymentsData) {
+    // التحقق من اتصال الطابعة
+    if (!writer) {
+        const connected = await connectToThermalPrinter();
+        if (!connected) {
+            Swal.fire({
+                icon: 'error',
+                title: 'خطأ في الطباعة',
+                text: 'تعذر الاتصال بالطابعة. يرجى التأكد من توصيلها والمحاولة مرة أخرى',
+                confirmButtonText: 'حسناً'
+            });
+            return false;
+        }
+    }
+    
+    try {
+        // الحصول على معلومات مفصلة عن كل حصة مدفوعة
+        const paymentDetails = await Promise.all(
+            paymentsData.payments.map(async (payment) => {
+                try {
+                    // إذا كانت معلومات الحصة غير مكتملة، جلبها من الخادم
+                    if (!payment.className && payment.classId) {
+                        const classResponse = await fetch(`/api/classes/${payment.classId}`, {
+                            headers: getAuthHeaders()
+                        });
+                        if (classResponse.ok) {
+                            const classData = await classResponse.json();
+                            payment.className = classData.name;
+                            payment.subject = classData.subject;
+                        }
+                    }
+                    
+                    return {
+                        className: payment.className || 'غير محدد',
+                        subject: payment.subject || 'غير محدد',
+                        month: payment.month,
+                        amount: payment.amount
+                    };
+                } catch (err) {
+                    console.error('Error fetching class details:', err);
+                    return {
+                        className: 'غير محدد',
+                        subject: 'غير محدد',
+                        month: payment.month,
+                        amount: payment.amount
+                    };
+                }
+            })
+        );
+        
+        // إعداد بيانات الإيصال المتعدد مع المعلومات الكاملة
+        const completePaymentData = {
+            studentName: paymentsData.studentName,
+            studentId: paymentsData.studentId,
+            payments: paymentDetails,
+            paymentMethod: paymentsData.paymentMethod || 'cash',
+            schoolContact: paymentsData.schoolContact || "الهاتف: 0559581957 | البريد: info@redox.com"
+        };
+        
+        // رسم الإيصال على Canvas
+        const canvas = drawMultiPaymentReceipt(completePaymentData);
+        
+        // الانتظار حتى يتم تحميل جميع الصور
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // تحويل Canvas إلى تنسيق ESC/POS
+        const rasterData = canvasToEscPos(canvas);
+        
+        // إرسال البيانات إلى الطابعة
+        await writer.write(rasterData);
+        
+        // إضافة أمر قطع الورق
+        await writer.write(new Uint8Array([0x1D, 0x56, 0x00]));
+        
+        return true;
+    } catch (err) {
+        console.error('Error printing multi-payment receipt:', err);
+        
+        Swal.fire({
+            icon: 'error',
+            title: 'خطأ في الطباعة',
+            text: 'حدث خطأ أثناء الطباعة: ' + err.message,
+            confirmButtonText: 'حسناً'
+        });
+        
+        return false;
+    }
+}
+
+
+
 // طباعة إيصال متعدد الحصص
 async function printMultiClassReceipt(student, payments) {
     if (!writer) {
@@ -8333,7 +8806,7 @@ function drawMultiClassReceipt(student, payments) {
     // المجموع
     ctx.font = "bold 18px Arial";
     ctx.fillText(`المبلغ الإجمالي: ${totalAmount} د.ج`, canvas.width - 20, yPosition);
-    yPosition += 30;
+    yPosition += 30;ا
     
     // طريقة الدفع وتاريخه
     ctx.font = "16px Arial";
