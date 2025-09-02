@@ -1142,6 +1142,7 @@ document.getElementById('show-register').addEventListener('click', function(e) {
 }
 
 // Data loading functions (students, teachers, classes, etc.)
+// في قسم loadStudents()، تحديث الصفوف لتشمل زر عرض التفاصيل
 async function loadStudents() {
     try {
         const response = await fetch('/api/students', {
@@ -1173,10 +1174,14 @@ async function loadStudents() {
                 <td>${student.parentName || '-'}</td>
                 <td>${getAcademicYearName(student.academicYear) || '-'}</td>
                 <td>${student.classes?.length || 0}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary btn-action" onclick="showStudentDetails('${student._id}', event)">
+                        <i class="bi bi-eye"></i> التفاصيل
+                    </button>
+                </td>
             `;
             tableBody.appendChild(row);
         });
-        
         
         document.getElementById('studentsCount').textContent = students.length;
     } catch (err) {
@@ -1184,6 +1189,8 @@ async function loadStudents() {
         Swal.fire('خطأ', 'حدث خطأ أثناء تحميل بيانات الطلاب', 'error');
     }
 }
+
+
 
 async function loadTeachers() {
     try {
@@ -1287,6 +1294,249 @@ async function loadClassrooms() {
         Swal.fire('خطأ', 'حدث خطأ أثناء تحميل بيانات القاعات', 'error');
     }
 }
+
+// ...existing code...
+
+async function showStudentDetails(studentId, event = null) {
+    if (event) event.stopPropagation();
+
+    try {
+        // جلب بيانات الطالب
+        const studentResponse = await fetch(`/api/students/${studentId}`, {
+            headers: getAuthHeaders()
+        });
+
+        if (studentResponse.status === 401) {
+            logout();
+            return;
+        }
+
+        const student = await studentResponse.json();
+
+        // جلب جميع الحصص
+        const classesResponse = await fetch('/api/classes', {
+            headers: getAuthHeaders()
+        });
+        const allClasses = await classesResponse.json();
+
+        // جلب جميع المدفوعات للطالب
+        const paymentsResponse = await fetch(`/api/payments?student=${studentId}`, {
+            headers: getAuthHeaders()
+        });
+        let payments = [];
+        if (paymentsResponse.ok) {
+            payments = await paymentsResponse.json();
+        }
+
+        // تجميع المدفوعات حسب الحصة
+        const paymentsByClass = {};
+        payments.forEach(payment => {
+            if (!paymentsByClass[payment.class._id]) {
+                paymentsByClass[payment.class._id] = {
+                    class: payment.class,
+                    payments: []
+                };
+            }
+            paymentsByClass[payment.class._id].payments.push(payment);
+        });
+
+        // إنشاء HTML لعرض الحصص والمدفوعات
+        let classesHtml = '';
+        Object.values(paymentsByClass).forEach(({ class: cls, payments }) => {
+            classesHtml += `
+                <div class="card mb-3">
+                    <div class="card-header bg-light">
+                        <strong>${cls.name}</strong> (${cls.subject}) - ${getAcademicYearName(cls.academicYear)}
+                    </div>
+                    <div class="card-body p-2">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>تحديد</th>
+                                    <th>الشهر</th>
+                                    <th>المبلغ</th>
+                                    <th>الحالة</th>
+                                    <th>تاريخ الدفع</th>
+                                    <th>إجراء</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${payments.map(payment => `
+                                    <tr>
+                                        <td>
+                                            ${payment.status !== 'paid' ? `
+                                                <input type="checkbox" class="multi-pay-checkbox" data-payment='${JSON.stringify(payment)}'>
+                                            ` : ''}
+                                        </td>
+                                        <td>${payment.month}</td>
+                                        <td>${payment.amount} د.ج</td>
+                                        <td>
+                                            <span class="badge ${payment.status === 'paid' ? 'bg-success' : 'bg-warning'}">
+                                                ${payment.status === 'paid' ? 'مسدد' : 'قيد الانتظار'}
+                                            </span>
+                                        </td>
+                                        <td>${payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('ar-EG') : '-'}</td>
+                                        <td>
+                                            ${payment.status !== 'paid' ? `
+                                                <button class="btn btn-sm btn-success" onclick="paySinglePayment('${payment._id}')">
+                                                    دفع
+                                                </button>
+                                            ` : `
+                                                <button class="btn btn-sm btn-info" onclick="reprintPaymentReceipt('${payment._id}')">
+                                                    <i class="bi bi-printer"></i>
+                                                </button>
+                                            `}
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        });
+
+        // زر دفع وطباعة المحدد
+        const multiPayBtn = `
+            <div class="mt-3 text-center">
+<button class="btn btn-primary" onclick="payAndPrintSelectedPayments('${studentId}')">
+    <i class="bi bi-cash-coin me-2"></i> دفع وطباعة المحدد
+</button>
+            </div>
+        `;
+
+        // عرض النتائج في modal
+        Swal.fire({
+            title: `تفاصيل الطالب: ${student.name}`,
+            html: `
+                <div>
+                    <div class="mb-3">
+                        <strong>الاسم:</strong> ${student.name}<br>
+                        <strong>رقم الطالب:</strong> ${student.studentId}<br>
+                        <strong>ولي الأمر:</strong> ${student.parentName || '-'}<br>
+                        <strong>هاتف ولي الأمر:</strong> ${student.parentPhone || '-'}<br>
+                        <strong>السنة الدراسية:</strong> ${getAcademicYearName(student.academicYear) || '-'}
+                    </div>
+                    <h5>الحصص والمدفوعات</h5>
+                    ${classesHtml}
+                    ${multiPayBtn}
+                </div>
+            `,
+            width: '900px',
+            showConfirmButton: false,
+            showCloseButton: true
+        });
+
+    } catch (err) {
+        console.error('Error loading student details:', err);
+        Swal.fire('خطأ', 'حدث خطأ أثناء تحميل تفاصيل الطالب', 'error');
+    }
+}
+
+// دفع دفعة واحدة
+
+// دفع وطباعة دفعات متعددة
+
+// ...existing code...
+
+function toggleAllPayments(checked) {
+    const checkboxes = document.querySelectorAll('.payment-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = checked;
+    });
+}
+
+async function printSelectedPayments() {
+    const selectedCheckboxes = document.querySelectorAll('.payment-checkbox:checked');
+    
+    if (selectedCheckboxes.length === 0) {
+        Swal.fire('تحذير', 'يرجى تحديد مدفوعات للطباعة', 'warning');
+        return;
+    }
+    
+    const payments = Array.from(selectedCheckboxes).map(checkbox => 
+        JSON.parse(checkbox.dataset.payment)
+    );
+    
+    try {
+        // إظهار نافذة تحميل
+        Swal.fire({
+            title: 'جاري الطباعة',
+            text: 'يرجى الانتظار أثناء تحضير الإيصالات',
+            icon: 'info',
+            showConfirmButton: false,
+            allowOutsideClick: false
+        });
+        
+        // طباعة كل إيصال
+        for (const payment of payments) {
+            await printPaymentReceiptToThermalPrinter(payment);
+            
+            // إضافة فاصل بين الإيصالات
+            if (writer) {
+                await writer.write(new TextEncoder().encode('\n\n\n\n\n'));
+            }
+        }
+        
+        Swal.fire({
+            icon: 'success',
+            title: 'تمت الطباعة',
+            text: `تم طباعة ${payments.length} إيصال بنجاح`,
+            confirmButtonText: 'حسناً'
+        });
+        
+    } catch (err) {
+        console.error('Error printing payments:', err);
+        Swal.fire({
+            icon: 'error',
+            title: 'خطأ',
+            text: 'حدث خطأ أثناء الطباعة: ' + err.message,
+            confirmButtonText: 'حسناً'
+        });
+    }
+}
+
+async function printPaymentReceiptToThermalPrinter(payment) {
+    if (!writer) {
+        const connected = await connectToThermalPrinter();
+        if (!connected) return false;
+    }
+    
+    try {
+        // إعداد بيانات الإيصال
+        const receiptData = {
+            studentName: payment.student?.name || 'غير معروف',
+            studentId: payment.student?.studentId || 'غير معروف',
+            className: payment.class?.name || 'غير معروف',
+            month: payment.month || 'غير محدد',
+            amount: payment.amount || 0,
+            paymentMethod: payment.paymentMethod || 'cash',
+            paymentDate: payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('ar-EG') : 'غير محدد',
+            schoolContact: "الهاتف: 0559581957 | البريد: info@redox.com"
+        };
+
+        // رسم الإيصال على Canvas
+        const canvas = drawPaymentReceipt(receiptData);
+        
+        // تحويل Canvas إلى تنسيق ESC/POS
+        const rasterData = canvasToEscPos(canvas);
+        
+        // إرسال البيانات إلى الطابعة
+        await writer.write(rasterData);
+        
+        return true;
+        
+    } catch (err) {
+        console.error('Error printing receipt:', err);
+        throw err;
+    }
+}
+
+
+
+
+
+
 
 async function loadStudentsForPayments() {
     try {
@@ -4371,6 +4621,17 @@ function startAttendanceBackgroundService() {
     }, 60000); // التحقق كل دقيقة
 }
 
+document.addEventListener('DOMContentLoaded', function() {
+    // التأكد من تحميل البيانات عند فتح قسم الطلاب
+    const studentsLink = document.getElementById('students-link');
+    if (studentsLink) {
+        studentsLink.addEventListener('click', function() {
+            // تحميل بيانات الطلاب عند النقر على القسم
+            loadStudents();
+        });
+    }
+});
+
 // بدء الخدمة عند تحميل التطبيق
 document.addEventListener('DOMContentLoaded', function() {
     const classSearchInput = document.getElementById('classSearchInput');
@@ -7124,6 +7385,10 @@ function simulateCardScan() {
   }
   
   
+  function loadStudentsTable() {
+    // يمكنك تنفيذ هذه الدالة أو استبدالها بـ loadStudents()
+    loadStudents();
+}
 
 
   function loadSectionData(sectionId) {
@@ -7135,8 +7400,7 @@ function simulateCardScan() {
         updateDashboardCounters();
         break;
       case 'students':
-        loadStudentsTable();
-        
+        loadStudents();        
         break;
       case 'teachers':
         loadTeachersTable();
@@ -7740,63 +8004,349 @@ function notifyAbsentStudents(absentCount, className) {
   
 
 // Function to show student details
-async function showStudentDetails(studentId) {
+async function showStudentDetails(studentId, event = null) {
+    if (event) event.stopPropagation();
+
     try {
-        const response = await fetch(`/api/students/${studentId}`, {
+        // جلب بيانات الطالب
+        const studentResponse = await fetch(`/api/students/${studentId}`, {
             headers: getAuthHeaders()
         });
 
-        if (response.status === 401) {
+        if (studentResponse.status === 401) {
             logout();
             return;
         }
 
-        const student = await response.json();
-        
-        // Create HTML for student details
-        const html = `
-            <div class="student-details">
-                <div class="text-center mb-3">
-                    <h4>${student.name}</h4>
-                    <p class="text-muted">${student.studentId}</p>
-                </div>
-                <div class="row">
-                    <div class="col-md-6">
-                        <p><strong>السنة الدراسية:</strong> ${getAcademicYearName(student.academicYear) || 'غير محدد'}</p>
-                        <p><strong>تاريخ التسجيل:</strong> ${new Date(student.registrationDate).toLocaleDateString('ar-EG')}</p>
+        const student = await studentResponse.json();
+
+        // جلب جميع الحصص
+        const classesResponse = await fetch('/api/classes', {
+            headers: getAuthHeaders()
+        });
+        const allClasses = await classesResponse.json();
+
+        // جلب جميع المدفوعات للطالب
+        const paymentsResponse = await fetch(`/api/payments?student=${studentId}`, {
+            headers: getAuthHeaders()
+        });
+        let payments = [];
+        if (paymentsResponse.ok) {
+            payments = await paymentsResponse.json();
+        }
+
+        // تجميع المدفوعات حسب الحصة
+        const paymentsByClass = {};
+        payments.forEach(payment => {
+            if (!paymentsByClass[payment.class._id]) {
+                paymentsByClass[payment.class._id] = {
+                    class: payment.class,
+                    payments: []
+                };
+            }
+            paymentsByClass[payment.class._id].payments.push(payment);
+        });
+
+        // إنشاء HTML لعرض الحصص والمدفوعات مع خيارات التحديد
+        let classesHtml = '';
+        Object.values(paymentsByClass).forEach(({ class: cls, payments }) => {
+            classesHtml += `
+                <div class="card mb-3">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <strong>${cls.name}</strong> (${cls.subject}) - ${getAcademicYearName(cls.academicYear)}
+                        <div>
+                            <input type="checkbox" class="form-check-input select-all-class" 
+                                   data-class-id="${cls._id}" onchange="toggleSelectAllPayments('${cls._id}', this.checked)">
+                            <label class="form-check-label ms-1">تحديد الكل</label>
+                        </div>
                     </div>
-                    <div class="col-md-6">
-                        <p><strong>ولي الأمر:</strong> ${student.parentName || 'غير محدد'}</p>
-                        <p><strong>هاتف ولي الأمر:</strong> ${student.parentPhone || 'غير محدد'}</p>
+                    <div class="card-body p-2">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>تحديد</th>
+                                    <th>الشهر</th>
+                                    <th>المبلغ</th>
+                                    <th>الحالة</th>
+                                    <th>تاريخ الدفع</th>
+                                    <th>إجراء</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${payments.map(payment => `
+                                    <tr>
+                                        <td>
+                                            ${payment.status !== 'paid' ? `
+                                                <input type="checkbox" class="multi-pay-checkbox form-check-input" 
+                                                       data-payment='${JSON.stringify(payment)}'
+                                                       data-class-id="${cls._id}" 
+                                                       onchange="updateSelectAllState('${cls._id}')">
+                                            ` : ''}
+                                        </td>
+                                        <td>${payment.month}</td>
+                                        <td>${payment.amount} د.ج</td>
+                                        <td>
+                                            <span class="badge ${payment.status === 'paid' ? 'bg-success' : 'bg-warning'}">
+                                                ${payment.status === 'paid' ? 'مسدد' : 'قيد الانتظار'}
+                                            </span>
+                                        </td>
+                                        <td>${payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('ar-EG') : '-'}</td>
+                                        <td>
+                                            ${payment.status !== 'paid' ? `
+                                                <button class="btn btn-sm btn-success" onclick="paySinglePayment('${payment._id}')">
+                                                    دفع
+                                                </button>
+                                            ` : `
+                                                <button class="btn btn-sm btn-info" onclick="reprintPaymentReceipt('${payment._id}')">
+                                                    <i class="bi bi-printer"></i>
+                                                </button>
+                                            `}
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-                <div class="mt-3">
-                    <h5>الحصص المسجلة:</h5>
-                    <ul>
-                        ${student.classes && student.classes.length > 0 ? 
-                            student.classes.map(cls => `<li>${cls.name} (${cls.subject})</li>`).join('') : 
-                            '<li>لا توجد حصص مسجلة</li>'
-                        }
-                    </ul>
-                </div>
+            `;
+        });
+
+        // زر دفع وطباعة المحدد
+        const multiPayBtn = `
+            <div class="mt-3 text-center">
+                <button class="btn btn-primary" onclick="payAndPrintSelectedPayments('${studentId}')">
+                    <i class="bi bi-cash-coin me-2"></i> دفع وطباعة المحدد
+                </button>
             </div>
         `;
 
+        // عرض النتائج في modal
         Swal.fire({
-            title: 'معلومات الطالب',
-            html: html,
-            width: '600px',
-            confirmButtonText: 'حسناً'
+            title: `تفاصيل الطالب: ${student.name}`,
+            html: `
+                <div>
+                    <div class="mb-3">
+                        <strong>الاسم:</strong> ${student.name}<br>
+                        <strong>رقم الطالب:</strong> ${student.studentId}<br>
+                        <strong>ولي الأمر:</strong> ${student.parentName || '-'}<br>
+                        <strong>هاتف ولي الأمر:</strong> ${student.parentPhone || '-'}<br>
+                        <strong>السنة الدراسية:</strong> ${getAcademicYearName(student.academicYear) || '-'}
+                    </div>
+                    <h5>الحصص والمدفوعات</h5>
+                    ${classesHtml}
+                    ${multiPayBtn}
+                </div>
+            `,
+            width: '900px',
+            showConfirmButton: false,
+            showCloseButton: true
         });
+
     } catch (err) {
-        console.error('Error:', err);
+        console.error('Error loading student details:', err);
+        Swal.fire('خطأ', 'حدث خطأ أثناء تحميل تفاصيل الطالب', 'error');
+    }
+}
+
+// دالة لتحديد/إلغاء تحديد جميع مدفوعات حصة معينة
+function toggleSelectAllPayments(classId, isChecked) {
+    const checkboxes = document.querySelectorAll(`.multi-pay-checkbox[data-class-id="${classId}"]`);
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = isChecked;
+    });
+}
+
+// دالة لتحديث حالة زر "تحديد الكل"
+function updateSelectAllState(classId) {
+    const checkboxes = document.querySelectorAll(`.multi-pay-checkbox[data-class-id="${classId}"]`);
+    const selectAllCheckbox = document.querySelector(`.select-all-class[data-class-id="${classId}"]`);
+    
+    const allChecked = Array.from(checkboxes).every(checkbox => checkbox.checked);
+    const someChecked = Array.from(checkboxes).some(checkbox => checkbox.checked);
+    
+    selectAllCheckbox.checked = allChecked;
+    selectAllCheckbox.indeterminate = someChecked && !allChecked;
+}
+
+// دفع دفعة واحدة
+window.paySinglePayment = async function(paymentId) {
+    try {
+        const response = await fetch(`/api/payments/${paymentId}/pay`, {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'cash' })
+        });
+        if (response.ok) {
+            const updatedPayment = await response.json();
+            await printPaymentReceiptToThermalPrinter(updatedPayment);
+            Swal.fire('نجاح', 'تم دفع الدفعة وطباعتها', 'success');
+            // إعادة تحميل التفاصيل
+            showStudentDetails(updatedPayment.student._id);
+        } else {
+            throw new Error('فشل في دفع الدفعة');
+        }
+    } catch (err) {
+        Swal.fire('خطأ', err.message, 'error');
+    }
+};
+
+// دفع وطباعة دفعات متعددة
+// دفع وطباعة دفعات متعددة
+// دفع وطباعة دفعات متعددة
+async function payAndPrintSelectedPayments(studentId) {
+    try {
+        // جمع الدفعات المحددة
+        const selectedCheckboxes = document.querySelectorAll('.multi-pay-checkbox:checked');
+        if (selectedCheckboxes.length === 0) {
+            Swal.fire('تنبيه', 'يرجى تحديد دفعات للدفع والطباعة', 'warning');
+            return;
+        }
+
+        const payments = Array.from(selectedCheckboxes).map(cb => 
+            JSON.parse(cb.dataset.payment)
+        );
+
+        // إظهار نافذة تحميل
+        Swal.fire({
+            title: 'جاري المعالجة',
+            text: `جاري دفع وطباعة ${payments.length} دفعة`,
+            icon: 'info',
+            showConfirmButton: false,
+            allowOutsideClick: false
+        });
+
+        // دفع كل دفعة
+        const paidPayments = [];
+        for (const payment of payments) {
+            const response = await fetch(`/api/payments/${payment._id}/pay`, {
+                method: 'PUT',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ 
+                    paymentDate: new Date().toISOString().split('T')[0], 
+                    paymentMethod: 'cash' 
+                })
+            });
+            
+            if (response.ok) {
+                const updatedPayment = await response.json();
+                paidPayments.push(updatedPayment);
+            } else {
+                console.error('Failed to pay payment:', payment._id);
+            }
+        }
+
+        // طباعة الإيصالات
+        if (paidPayments.length > 0) {
+            for (const payment of paidPayments) {
+                await printPaymentReceiptToThermalPrinter(payment);
+                // إضافة فاصل بين الإيصالات
+                if (writer) {
+                    await writer.write(new TextEncoder().encode('\n\n\n\n\n'));
+                }
+            }
+
+            Swal.fire({
+                icon: 'success',
+                title: 'تمت العملية بنجاح',
+                text: `تم دفع وطباعة ${paidPayments.length} دفعة بنجاح`,
+                confirmButtonText: 'حسناً'
+            });
+        } else {
+            throw new Error('فشل في دفع أي من الدفعات المحددة');
+        }
+
+        // إعادة تحميل التفاصيل
+        showStudentDetails(studentId);
+
+    } catch (err) {
+        console.error('Error paying selected payments:', err);
         Swal.fire({
             icon: 'error',
             title: 'خطأ',
-            text: 'حدث خطأ أثناء جلب معلومات الطالب',
+            text: 'حدث خطأ أثناء دفع الدفعات المحددة: ' + err.message,
             confirmButtonText: 'حسناً'
         });
     }
+}
+// طباعة إيصال متعدد الحصص
+async function printMultiClassReceipt(student, payments) {
+    if (!writer) {
+        const connected = await connectToThermalPrinter();
+        if (!connected) return false;
+    }
+    
+    try {
+        const canvas = drawMultiClassReceipt(student, payments);
+        const rasterData = canvasToEscPos(canvas);
+        await writer.write(rasterData);
+        
+        return true;
+    } catch (err) {
+        console.error('Error printing multi-class receipt:', err);
+        throw err;
+    }
+}
+
+function drawMultiClassReceipt(student, payments) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 580;
+    canvas.height = 300 + (payments.length * 40); // ارتفاع ديناميكي حسب عدد الحصص
+    
+    const ctx = canvas.getContext("2d");
+    
+    // الخلفية
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // العنوان
+    ctx.fillStyle = "#000000";
+    ctx.textAlign = "center";
+    ctx.font = "bold 28px Arial";
+    ctx.fillText("إيصال دفع متعدد الحصص", canvas.width / 2, 50);
+    
+    // معلومات الطالب
+    ctx.textAlign = "right";
+    ctx.font = "18px Arial";
+    let yPosition = 100;
+    
+    ctx.fillText(`الطالب: ${student.name}`, canvas.width - 20, yPosition);
+    yPosition += 30;
+    ctx.fillText(`رقم الطالب: ${student.studentId}`, canvas.width - 20, yPosition);
+    yPosition += 40;
+    
+    // تفاصيل المدفوعات
+    ctx.font = "bold 20px Arial";
+    ctx.fillText("تفاصيل المدفوعات", canvas.width - 20, yPosition);
+    yPosition += 30;
+    
+    ctx.font = "16px Arial";
+    let totalAmount = 0;
+    
+    payments.forEach(payment => {
+        ctx.fillText(`${payment.class.name} - ${payment.month}: ${payment.amount} د.ج`, canvas.width - 20, yPosition);
+        yPosition += 25;
+        totalAmount += payment.amount;
+    });
+    
+    yPosition += 20;
+    
+    // المجموع
+    ctx.font = "bold 18px Arial";
+    ctx.fillText(`المبلغ الإجمالي: ${totalAmount} د.ج`, canvas.width - 20, yPosition);
+    yPosition += 30;
+    
+    // طريقة الدفع وتاريخه
+    ctx.font = "16px Arial";
+    ctx.fillText(`طريقة الدفع: ${getPaymentMethodName(payments[0].paymentMethod)}`, canvas.width - 20, yPosition);
+    yPosition += 25;
+    ctx.fillText(`تاريخ الطباعة: ${new Date().toLocaleDateString('ar-EG')}`, canvas.width - 20, yPosition);
+    yPosition += 40;
+    
+    // تذييل
+    ctx.textAlign = "center";
+    ctx.fillText("شكراً لثقتكم بنا", canvas.width / 2, yPosition);
+    
+    return canvas;
 }
 
 // Create gate interface section
