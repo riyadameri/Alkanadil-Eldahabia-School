@@ -5295,7 +5295,9 @@
             <button class="btn btn-outline-info" onclick="showAttendanceModal('${student._id}')" ><i class="bi bi-clock-history"></i> الحضور</button>
             <button class="btn btn-outline-warning" onclick="printReceipt('${student._id}')" ><i class="bi bi-cash"></i> طباعة إيصال</button>
 
-
+                        <button class="btn btn-sm btn-outline-primary btn-action" onclick="showStudentDetails('${student._id}', event)">
+                            <i class="bi bi-eye"></i> دقع الحصص
+                        </button>
 
     ` : ''}
     </td>
