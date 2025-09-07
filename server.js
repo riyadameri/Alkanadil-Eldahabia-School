@@ -1,4 +1,4 @@
-  require('dotenv').config();
+require('dotenv').config();
   const express = require('express');
   const mongoose = require('mongoose');
   const { SerialPort } = require('serialport');
@@ -700,30 +700,36 @@
   // Update authenticate middleware to check for accounting access
   // Update your authenticate middleware to handle single role or array
   const authenticate = (roles = []) => {
-  // Convert single role to array for consistency
-  if (typeof roles === 'string') {
-    roles = [roles];
-  }
-
-  return (req, res, next) => {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) return res.status(401).json({ error: 'غير مصرح بالدخول' });
-
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.user = decoded;
-
-      if (roles.length && !roles.includes(decoded.role)) {
-        return res.status(403).json({ error: 'غير مصرح بالوصول لهذه الصلاحية' });
+    return (req, res, next) => {
+      try {
+        const token = req.headers.authorization?.split(' ')[1];
+        
+        if (!token) {
+          // For count endpoints, you might want to allow public access
+          if (req.path.includes('/count')) {
+            return next();
+          }
+          return res.status(401).json({ error: 'غير مصرح بالدخول' });
+        }
+  
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = decoded;
+  
+        if (roles.length && !roles.includes(decoded.role)) {
+          return res.status(403).json({ error: 'غير مصرح بالوصول لهذه الصلاحية' });
+        }
+  
+        next();
+      } catch (err) {
+        // For count endpoints, allow continuation even if token is invalid
+        if (req.path.includes('/count')) {
+          return next();
+        }
+        res.status(401).json({ error: 'رمز الدخول غير صالح' });
       }
-
-      next();
-    } catch (err) {
-      res.status(401).json({ error: 'رمز الدخول غير صالح' });
-    }
+    };
   };
-  };
-
+  
   // Email Configuration
   const transporter = nodemailer.createTransport({
     service: 'gmail',
@@ -816,29 +822,48 @@
 
   // Students
   // get only active students
-  app.get('/api/students', /* authenticate(['admin', 'secretary', 'accountant']), */ async (req, res) => {
-    try {
-      const { academicYear, active } = req.query;
+// Replace this problematic code in /api/students endpoint:
+app.get('/api/students', authenticate(['admin', 'secretary', 'accountant']), async (req, res) => {
+  try {
+    const { academicYear, active } = req.query;
+    const query = { status: 'active' };
 
-  //   if (academicYear) query.academicYear = academicYear;
-      if (active) query.active = active === true;
+    if (academicYear) query.academicYear = academicYear;
+    if (active !== undefined) query.active = active === 'true';
 
-      const students = await Student.find({status : 'active' }).sort({ name: 1 });
+    const students = await Student.find(query).sort({ name: 1 });
+    res.json(students);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-      res.json(students);
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  });
+// ObjectId validation middleware
+const validateObjectId = (req, res, next) => {
+  const { id } = req.params;
+  
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({ error: 'معرف غير صالح' });
+  }
+  
+  next();
+};
+
+
+
   //get all students
-  app.get('/api/allstudents',/* authenticate(['admin', 'secretary', 'accountant']), */ ()=>{
-    try {
-      const students = Student.find();
-      res.json(students);
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  })
+  // app.get('/api/allstudents',/* authenticate(['admin', 'secretary', 'accountant']), */ ()=>{
+  //   try {
+  //     const students = Student.find();
+  //     res.json(students);
+  //   } catch (err) {
+  //     res.status(500).json({ error: err.message });
+  //   }
+  // })
+
+
+
+
   // activate student
   app.put('/api/students/:id/activate', authenticate(['admin', 'secretary']), async (req, res) => {
     try {
@@ -880,17 +905,16 @@
 
 
 
-  app.get('/api/students/:id', /* authenticate(['admin', 'secretary', 'accountant']),*/ async (req, res) => {
+  app.get('/api/students/:id', validateObjectId, authenticate(['admin', 'secretary', 'accountant']), async (req, res) => {
     try {
-      const student = await Student.findById(req.params.id)
-        .populate('classes');
+      const student = await Student.findById(req.params.id).populate('classes');
       if (!student) return res.status(404).json({ error: 'الطالب غير موجود' });
       res.json(student);
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
   });
-
+  
   app.put('/api/students/:id', authenticate(['admin', 'secretary']), async (req, res) => {
     try {
       const student = await Student.findByIdAndUpdate(
@@ -3917,34 +3941,95 @@ app.get('/api/payments/:id', authenticate(['admin', 'secretary', 'accountant']),
   });
 
 
-  // في ملف server.js أو app.js
-  app.get('/api/students/count', async (req, res) => {
-    try {
-      const count = await Student.countDocuments();
-      res.json(count);
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  });
+// Students count endpoint
+app.get('/api/students/count', async (req, res) => {
+  try {
+    const students = await Student.find({ status: 'active' });
+    res.json({ count: students.length, status: 'success' });
+  } catch (error) {
+    console.error('Error counting students:', error);
+    res.status(500).json({ 
+      error: 'Failed to count students',
+      status: 'error'
+    });
+  }
+});
 
-  app.get('/api/teachers/count', async (req, res) => {
-    try {
-      const count = await Teacher.countDocuments();
-      res.json(count);
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  });
+// Teachers count endpoint
+app.get('/api/teachers/count', async (req, res) => {
+  try {
+    const teachers = await Teacher.find({ active: true });
+    res.json({ count: teachers.length, status: 'success' });
+  } catch (error) {
+    console.error('Error counting teachers:', error);
+    res.status(500).json({ 
+      error: 'Failed to count teachers',
+      status: 'error'
+    });
+  }
+});
 
-  app.get('/api/classes/count', async (req, res) => {
-    try {
-      const count = await Class.countDocuments();
-      res.json(count);
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  });
+// Classes count endpoint
+app.get('/api/classes/count', async (req, res) => {
+  try {
+    const classes = await Class.find({});
+    res.json({ count: classes.length, status: 'success' });
+  } catch (error) {
+    console.error('Error counting classes:', error);
+    res.status(500).json({ 
+      error: 'Failed to count classes',
+      status: 'error'
+    });
+  }
+});
 
+
+
+// Add the missing transactions endpoint
+app.get('/api/accounting/transactions', authenticate(['admin', 'accountant']), async (req, res) => {
+  try {
+      const { limit = 50, type, startDate, endDate } = req.query;
+      const query = {};
+      
+      if (type) query.type = type;
+      if (startDate || endDate) {
+          query.date = {};
+          if (startDate) query.date.$gte = new Date(startDate);
+          if (endDate) query.date.$lte = new Date(endDate);
+      }
+      
+      const transactions = await FinancialTransaction.find(query)
+          .populate('recordedBy')
+          .sort({ date: -1 })
+          .limit(parseInt(limit));
+      
+      res.json(transactions);
+  } catch (err) {
+      res.status(500).json({ error: err.message });
+  }
+});
+
+
+// Health check endpoint
+app.get('/api/health', async (req, res) => {
+  try {
+      // Check database connection
+      await mongoose.connection.db.admin().ping();
+      
+      res.json({ 
+          status: 'OK', 
+          timestamp: new Date().toISOString(),
+          database: 'connected'
+      });
+  } catch (error) {
+      res.status(500).json({ 
+          status: 'ERROR', 
+          timestamp: new Date().toISOString(),
+          database: 'disconnected',
+          error: error.message 
+      });
+  }
+});
   const PORT = process.env.PORT || 4200;
   server.listen(PORT, () => {
   console.log(` server is working on : http://localhost:${PORT}`);
@@ -3975,3 +4060,22 @@ app.get('/api/payments/:id', authenticate(['admin', 'secretary', 'accountant']),
   // application specific logging, throwing an error, or other logic here
   });
 
+// Global error handling middleware
+app.use((error, req, res, next) => {
+  console.error('Unhandled Error:', error);
+  res.status(500).json({ 
+      error: 'Internal server error',
+      message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+  });
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  process.exit(1);
+}); 

@@ -10,10 +10,6 @@
 
 
 
-
-
-    // Thermal Printer Functions for Student Payment Receipts
-
     // Initialize printer variables
     let port, writer;
 
@@ -51,6 +47,33 @@
             return false;
         }
     }
+
+
+    // Utility function for API calls with error handling
+async function apiCall(url, options = {}) {
+    try {
+        const response = await fetch(url, {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                'Content-Type': 'application/json',
+                ...options.headers
+            },
+            ...options
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('API call failed:', error);
+        showError(`Failed to load data: ${error.message}`);
+        throw error;
+    }
+}
+
+// Usage example for counting students
 
 
 
