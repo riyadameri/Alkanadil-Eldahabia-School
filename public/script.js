@@ -904,6 +904,7 @@ function setupDashboardRFID() {
 
 
 function initApp() {
+    initHeader();
 
 
     initAccountingEventListeners();
@@ -1326,6 +1327,8 @@ async function loadStudents() {
         });
         
         document.getElementById('studentsCount').textContent = students.length;
+        document.getElementById('stNum').textContent = students.length;
+        
     } catch (err) {
         console.error('Error loading students:', err);
         Swal.fire('خطأ', 'حدث خطأ أثناء تحميل بيانات الطلاب', 'error');
@@ -1371,6 +1374,7 @@ async function loadTeachers() {
         });
         
         document.getElementById('teachersCount').textContent = teachers.length;
+        document.getElementById('tNum').textContent = teachers.length;
     } catch (err) {
         console.error('Error loading teachers:', err);
         Swal.fire('خطأ', 'حدث خطأ أثناء تحميل بيانات الأساتذة', 'error');
@@ -7223,6 +7227,7 @@ function updateClassesTable(classes) {
     });
     
     document.getElementById('classesCount').textContent = classes.length;
+    document.getElementById('lNum').textContent = classes.length;
 }
 
 
@@ -7512,6 +7517,10 @@ async function updateDashboardCounters() {
     if (teachersResponse.ok) {
         const teachersCount = await teachersResponse.json();
         document.getElementById('teachersCount').textContent = teachersCount;
+        document.getElementById('header-teachers-count').textContent = teachersCount ;
+
+        
+        
     }
 
     // تحميل عدد الحصص
@@ -10946,3 +10955,171 @@ function displayFinancialReport(report) {
 document.getElementById('accounting-link').addEventListener('click', function() {
     initAccountingSection();
 });
+
+
+// تحديث بيانات الهيدر بشكل ديناميكي
+async function updateHeaderStats() {
+    try {
+        // جلب إحصائيات عامة من الخادم
+        const statsResponse = await fetch('/api/stats', {
+            headers: getAuthHeaders()
+        });
+
+        if (statsResponse.ok) {
+            const stats = await statsResponse.json();
+            
+            // تحديث العدادات في الهيدر
+            document.getElementById('header-students-count').textContent = students.length || 9;
+            
+            // تحديث معلومات المستخدم
+            const user = JSON.parse(localStorage.getItem('user'));
+            if (user) {
+                document.getElementById('header-user-name').textContent = user.name;
+                document.getElementById('header-user-role').textContent = getRoleName(user.role);
+                
+                // تعيين الصورة الشخصية
+                const avatarUrl = user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=3498db&color=fff`;
+                document.getElementById('header-user-avatar').src = avatarUrl;
+            }
+            
+            // تحديث عداد الإشعارات إذا وجد
+            if (stats.notifications) {
+                const notificationBadge = document.querySelector('.notification-badge');
+                if (notificationBadge) {
+                    notificationBadge.textContent = stats.notifications.unread || 0;
+                    notificationBadge.style.display = stats.notifications.unread > 0 ? 'block' : 'none';
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Error updating header stats:', err);
+    }
+}
+
+// تحديث الإحصائيات في الأوقات المناسبة
+function setupHeaderStatsUpdates() {
+    // تحديث عند تحميل الصفحة
+    updateHeaderStats();
+    
+    // تحديث كل 5 دقائق
+    setInterval(updateHeaderStats, 5 * 60 * 1000);
+    
+    // تحديث عند تغيير القسم
+    document.querySelectorAll('[data-section]').forEach(link => {
+        link.addEventListener('click', () => {
+            updateHeaderStats();
+        });
+    });
+    
+    // تحديث بعد العمليات المهمة
+    const updateEvents = [
+        'student-added',
+        'student-removed',
+        'teacher-added',
+        'teacher-removed',
+        'class-added',
+        'class-removed'
+    ];
+    
+    updateEvents.forEach(event => {
+        socket.on(event, () => {
+            updateHeaderStats();
+        });
+    });
+}
+
+// إضافة الدالة لتهيئة الهيدر
+function initHeader() {
+    // تهيئة القائمة المنسدلة للإشعارات
+    const notificationBtn = document.querySelector('.notification-btn');
+    if (notificationBtn) {
+        notificationBtn.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/notifications', {
+                    headers: getAuthHeaders()
+                });
+                
+                if (response.ok) {
+                    const notifications = await response.json();
+                    showNotificationsPopup(notifications);
+                }
+            } catch (err) {
+                console.error('Error fetching notifications:', err);
+            }
+        });
+    }
+    
+    // تهيئة القائمة المنسدلة للمستخدم
+    const userDropdown = document.querySelector('.user-dropdown');
+    if (userDropdown) {
+        userDropdown.addEventListener('click', () => {
+            const dropdownMenu = document.querySelector('.user-dropdown-menu');
+            dropdownMenu.classList.toggle('show');
+        });
+    }
+    
+    // إغلاق القوائم المنسدلة عند النقر خارجها
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.notification-btn') && !e.target.closest('.user-dropdown')) {
+            document.querySelectorAll('.dropdown-menu').forEach(menu => {
+                menu.classList.remove('show');
+            });
+        }
+    });
+    
+    // بدء تحديثات الإحصائيات
+    setupHeaderStatsUpdates();
+}
+
+// دالة لعرض الإشعارات في نافذة منبثقة
+function showNotificationsPopup(notifications) {
+    const notificationsHtml = notifications.map(notification => `
+        <div class="notification-item ${notification.read ? '' : 'unread'}" data-id="${notification._id}">
+            <div class="notification-content">
+                <i class="bi ${getNotificationIcon(notification.type)}"></i>
+                <span>${notification.message}</span>
+            </div>
+            <small>${new Date(notification.date).toLocaleString('ar-EG')}</small>
+        </div>
+    `).join('');
+    
+    Swal.fire({
+        title: 'الإشعارات',
+        html: `
+            <div class="notifications-container">
+                ${notifications.length > 0 ? notificationsHtml : '<p class="text-muted">لا توجد إشعارات</p>'}
+            </div>
+        `,
+        showConfirmButton: false,
+        showCloseButton: true,
+        width: '400px'
+    });
+    
+    // تحديث حالة الإشعارات كمقروءة
+    if (notifications.some(n => !n.read)) {
+        fetch('/api/notifications/mark-read', {
+            method: 'POST',
+            headers: getAuthHeaders()
+        }).then(() => {
+            updateHeaderStats();
+        });
+    }
+}
+
+// دالة مساعدة لتحديد أيقونة الإشعار
+function getNotificationIcon(type) {
+    const icons = {
+        'student': 'bi-person',
+        'payment': 'bi-cash',
+        'attendance': 'bi-clock',
+        'system': 'bi-gear',
+        'warning': 'bi-exclamation-triangle'
+    };
+    return icons[type] || 'bi-bell';
+}
+
+// إضافة الدالة للتهيئة العامة للتطبيق
+
+
+// بدء التطبيق عند تحميل الصفحة
+document.addEventListener('DOMContentLoaded', initApp);

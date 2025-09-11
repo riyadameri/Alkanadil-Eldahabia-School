@@ -257,16 +257,16 @@ require('dotenv').config();
 
   // Teacher Payment Schema (monthly payments)
   const teacherPaymentSchema = new mongoose.Schema({
-  teacher: { type: mongoose.Schema.Types.ObjectId, ref: 'Teacher', required: true },
-  class: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: true },
-  student: { type: mongoose.Schema.Types.ObjectId, ref: 'Student', required: true },
-  month: { type: String, required: true }, // Format: YYYY-MM
-  amount: { type: Number, required: true }, // 70% of class price
-  status: { type: String, enum: ['paid', 'pending', 'late'], default: 'pending' },
-  paymentDate: { type: Date, default: null },
-  paymentMethod: { type: String, enum: ['cash', 'bank', 'online'], default: 'cash' },
-  invoiceNumber: String,
-  recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+    teacher: { type: mongoose.Schema.Types.ObjectId, ref: 'Teacher', required: true },
+    class: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: true },
+    student: { type: mongoose.Schema.Types.ObjectId, ref: 'Student', required: true },
+    month: { type: String, required: true }, // Format: YYYY-MM
+    amount: { type: Number, required: true }, // 70% of class price
+    status: { type: String, enum: ['paid', 'pending', 'late'], default: 'pending' },
+    paymentDate: { type: Date, default: null },
+    paymentMethod: { type: String, enum: ['cash', 'bank', 'online'], default: 'cash' },
+    invoiceNumber: String,
+    recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
   });
 
   // Staff Salary Schema
@@ -2640,6 +2640,10 @@ app.get('/api/payments/:id', authenticate(['admin', 'secretary', 'accountant']),
   app.get('/student/login', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'student-login.html'));
   });
+  app.get('/accounting', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'accounting.html'));
+  });
+
 
   app.get('/student/dashboard', authenticate(['student', 'secretary', 'admin','accountant']), (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'student-dashboard.html'));

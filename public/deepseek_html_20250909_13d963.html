@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة تحكم المحاسبة - نظام إدارة المدرسة</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --accent-color: #e74c3c;
+            --light-color: #ecf0f1;
+            --dark-color: #2c3e50;
+            --success-color: #27ae60;
+            --warning-color: #f39c12;
+        }
+        
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: #f8f9fa;
+            color: #333;
+        }
+        
+        .sidebar {
+            background-color: var(--primary-color);
+            color: white;
+            height: 100vh;
+            position: fixed;
+            padding-top: 20px;
+        }
+        
+        .sidebar .nav-link {
+            color: rgba(255, 255, 255, 0.8);
+            padding: 10px 20px;
+            margin: 5px 0;
+            border-radius: 5px;
+        }
+        
+        .sidebar .nav-link:hover, .sidebar .nav-link.active {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+        
+        .sidebar .nav-link i {
+            margin-left: 10px;
+        }
+        
+        .main-content {
+            margin-right: 250px;
+            padding: 20px;
+        }
+        
+        .dashboard-card {
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s;
+        }
+        
+        .dashboard-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .card-income {
+            background: linear-gradient(45deg, #2ecc71, #27ae60);
+            color: white;
+        }
+        
+        .card-expenses {
+            background: linear-gradient(45deg, #e74c3c, #c0392b);
+            color: white;
+        }
+        
+        .card-balance {
+            background: linear-gradient(45deg, #3498db, #2980b9);
+            color: white;
+        }
+        
+        .card-pending {
+            background: linear-gradient(45deg, #f39c12, #e67e22);
+            color: white;
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        
+        .table-responsive {
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .btn-primary {
+            background-color: var(--secondary-color);
+            border-color: var(--secondary-color);
+        }
+        
+        .btn-primary:hover {
+            background-color: #2980b9;
+            border-color: #2980b9;
+        }
+        
+        .section-title {
+            border-bottom: 2px solid var(--secondary-color);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            color: var(--dark-color);
+        }
+        
+        .content-section {
+            display: none;
+        }
+        
+        .content-section.active {
+            display: block;
+        }
+        
+        .modal-header {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        
+        .badge-paid {
+            background-color: var(--success-color);
+        }
+        
+        .badge-pending {
+            background-color: var(--warning-color);
+        }
+        
+        .badge-late {
+            background-color: var(--accent-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 sidebar">
+                <div class="text-center mb-4">
+                    <h4>نظام المحاسبة</h4>
+                    <p class="text-muted">مركز التميز للتعليم</p>
+                </div>
+                
+                <ul class="nav flex-column">
+                    <li class="nav-item">
+                        <a href="#" class="nav-link active" data-section="dashboard">
+                            <i class="fas fa-tachometer-alt"></i> لوحة التحكم
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-section="transactions">
+                            <i class="fas fa-exchange-alt"></i> المعاملات
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-section="payments">
+                            <i class="fas fa-money-bill-wave"></i> مدفوعات الطلاب
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-section="teacher-payments">
+                            <i class="fas fa-chalkboard-teacher"></i> رواتب الأساتذة
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-section="expenses">
+                            <i class="fas fa-receipt"></i> المصروفات
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-section="reports">
+                            <i class="fas fa-chart-bar"></i> التقارير
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-section="employees">
+                            <i class="fas fa-users"></i> إدارة الموظفين
+                        </a>
+                    </li>
+                    <li class="nav-item mt-4">
+                        <a href="#" class="nav-link text-warning" id="logout-btn">
+                            <i class="fas fa-sign-out-alt"></i> تسجيل الخروج
+                        </a>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-md-9 col-lg-10 main-content">
+                <!-- Dashboard Section -->
+                <div class="content-section active" id="dashboard-section">
+                    <h2 class="section-title">لوحة تحكم المحاسبة</h2>
+                    
+                    <div class="row mb-4">
+                        <div class="col-md-3 mb-3">
+                            <div class="card dashboard-card card-income">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <h5 class="card-title">الإيرادات</h5>
+                                            <p class="stat-number" id="total-income">0 د.ج</p>
+                                        </div>
+                                        <i class="fas fa-money-bill-wave fa-3x opacity-50"></i>
+                                    </div>
+                                    <p class="card-text">هذا الشهر</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="card dashboard-card card-expenses">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <h5 class="card-title">المصروفات</h5>
+                                            <p class="stat-number" id="total-expenses">0 د.ج</p>
+                                        </div>
+                                        <i class="fas fa-receipt fa-3x opacity-50"></i>
+                                    </div>
+                                    <p class="card-text">هذا الشهر</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="card dashboard-card card-balance">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <h5 class="card-title">الرصيد</h5>
+                                            <p class="stat-number" id="current-balance">0 د.ج</p>
+                                        </div>
+                                        <i class="fas fa-wallet fa-3x opacity-50"></i>
+                                    </div>
+                                    <p class="card-text">الحالي</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="card dashboard-card card-pending">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <h5 class="card-title">المستحقات</h5>
+                                            <p class="stat-number" id="pending-payments">0 د.ج</p>
+                                        </div>
+                                        <i class="fas fa-clock fa-3x opacity-50"></i>
+                                    </div>
+                                    <p class="card-text">مدفوعات معلقة</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-8 mb-4">
+                            <div class="card">
+                                <div class="card-header bg-primary text-white">
+                                    <h5 class="mb-0">الإيرادات والمصروفات خلال السنة</h5>
+                                </div>
+                                <div class="card-body">
+                                    <canvas id="financialChart" height="250"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-4">
+                            <div class="card">
+                                <div class="card-header bg-info text-white">
+                                    <h5 class="mb-0">توزيع المصروفات</h5>
+                                </div>
+                                <div class="card-body">
+                                    <canvas id="expensesChart" height="250"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                                    <h5 class="mb-0">أحدث المعاملات</h5>
+                                    <a href="#" class="text-white" data-section="transactions">عرض الكل</a>
+                                </div>
+                                <div class="card-body p-0">
+                                    <div class="table-responsive">
+                                        <table class="table table-hover table-striped mb-0">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th>التاريخ</th>
+                                                    <th>النوع</th>
+                                                    <th>الوصف</th>
+                                                    <th>المبلغ</th>
+                                                    <th>الحالة</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="recent-transactions">
+                                                <!-- Will be populated by JavaScript -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Other sections will be implemented similarly -->
+                <div class="content-section" id="transactions-section">
+                    <h2 class="section-title">إدارة المعاملات</h2>
+                    <!-- Transactions management content -->
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> قسم إدارة المعاملات - تحت التطوير
+                    </div>
+                </div>
+                
+                <div class="content-section" id="payments-section">
+                    <h2 class="section-title">مدفوعات الطلاب</h2>
+                    <!-- Student payments content -->
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> قسم مدفوعات الطلاب - تحت التطوير
+                    </div>
+                </div>
+                
+                <div class="content-section" id="teacher-payments-section">
+                    <h2 class="section-title">رواتب الأساتذة</h2>
+                    <!-- Teacher payments content -->
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> قسم رواتب الأساتذة - تحت التطوير
+                    </div>
+                </div>
+                
+                <div class="content-section" id="expenses-section">
+                    <h2 class="section-title">إدارة المصروفات</h2>
+                    <!-- Expenses management content -->
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> قسم إدارة المصروفات - تحت التطوير
+                    </div>
+                </div>
+                
+                <div class="content-section" id="reports-section">
+                    <h2 class="section-title">التقارير المالية</h2>
+                    <!-- Financial reports content -->
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> قسم التقارير المالية - تحت التطوير
+                    </div>
+                </div>
+                
+                <div class="content-section" id="employees-section">
+                    <h2 class="section-title">إدارة الموظفين</h2>
+                    <!-- Employees management content -->
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> قسم إدارة الموظفين - تحت التطوير
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let authToken = localStorage.getItem('authToken');
+        let currentUser = null;
+        
+        // Check authentication
+        if (!authToken) {
+            window.location.href = '/accounting/login';
+        }
+        
+        // DOM elements
+        const navLinks = document.querySelectorAll('.nav-link[data-section]');
+        const contentSections = document.querySelectorAll('.content-section');
+        
+        // Initialize the dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            // Verify authentication
+            verifyAuthentication();
+            
+            // Load dashboard data
+            loadDashboardData();
+            
+            // Set up navigation
+            navLinks.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    
+                    // Remove active class from all links
+                    navLinks.forEach(l => l.classList.remove('active'));
+                    
+                    // Add active class to clicked link
+                    this.classList.add('active');
+                    
+                    // Hide all content sections
+                    contentSections.forEach(section => section.classList.remove('active'));
+                    
+                    // Show the selected section
+                    const sectionId = `${this.getAttribute('data-section')}-section`;
+                    document.getElementById(sectionId).classList.add('active');
+                });
+            });
+            
+            // Set up logout button
+            document.getElementById('logout-btn').addEventListener('click', function(e) {
+                e.preventDefault();
+                localStorage.removeItem('authToken');
+                window.location.href = '/accounting/login';
+            });
+        });
+        
+        // Verify user authentication
+        async function verifyAuthentication() {
+            try {
+                const response = await fetch('/api/auth/verify', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('غير مصرح');
+                }
+                
+                const userData = await response.json();
+                currentUser = userData;
+            } catch (error) {
+                localStorage.removeItem('authToken');
+                window.location.href = '/accounting/login';
+            }
+        }
+        
+        // Load dashboard data
+        async function loadDashboardData() {
+            try {
+                // Load financial summary
+                const summaryResponse = await fetch('/api/accounting/dashboard', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (summaryResponse.ok) {
+                    const summaryData = await summaryResponse.json();
+                    updateSummaryCards(summaryData);
+                }
+                
+                // Load recent transactions
+                const transactionsResponse = await fetch('/api/accounting/transactions?limit=5', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (transactionsResponse.ok) {
+                    const transactionsData = await transactionsResponse.json();
+                    updateRecentTransactions(transactionsData);
+                }
+                
+                // Load financial chart data
+                const financialDataResponse = await fetch('/api/accounting/reports/financial', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (financialDataResponse.ok) {
+                    const financialData = await financialDataResponse.json();
+                    renderFinancialCharts(financialData);
+                }
+                
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+                showError('فشل في تحميل بيانات لوحة التحكم');
+            }
+        }
+        
+        // Update summary cards
+        function updateSummaryCards(data) {
+            document.getElementById('total-income').textContent = `${data.currentMonthSummary.income.toLocaleString()} د.ج`;
+            document.getElementById('total-expenses').textContent = `${data.currentMonthSummary.expenses.toLocaleString()} د.ج`;
+            document.getElementById('current-balance').textContent = `${data.currentMonthSummary.profit.toLocaleString()} د.ج`;
+            
+            // For pending payments, we might need a separate API call
+            fetchPendingPayments();
+        }
+        
+        // Fetch pending payments
+        async function fetchPendingPayments() {
+            try {
+                const response = await fetch('/api/payments?status=pending', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const pendingPayments = await response.json();
+                    const totalPending = pendingPayments.reduce((sum, payment) => sum + payment.amount, 0);
+                    document.getElementById('pending-payments').textContent = `${totalPending.toLocaleString()} د.ج`;
+                }
+            } catch (error) {
+                console.error('Error fetching pending payments:', error);
+            }
+        }
+        
+        // Update recent transactions table
+        function updateRecentTransactions(transactions) {
+            const tbody = document.getElementById('recent-transactions');
+            tbody.innerHTML = '';
+            
+            transactions.forEach(transaction => {
+                const row = document.createElement('tr');
+                
+                // Format date
+                const date = new Date(transaction.date).toLocaleDateString('ar-EG');
+                
+                // Determine badge class based on type
+                const typeClass = transaction.type === 'income' ? 'text-success' : 'text-danger';
+                const typeIcon = transaction.type === 'income' ? 'fa-arrow-down' : 'fa-arrow-up';
+                
+                // Determine status badge
+                let statusBadge = '';
+                if (transaction.reference && transaction.reference.status) {
+                    const statusClass = transaction.reference.status === 'paid' ? 'badge-paid' : 
+                                      transaction.reference.status === 'pending' ? 'badge-pending' : 'badge-late';
+                    statusBadge = `<span class="badge ${statusClass}">${transaction.reference.status}</span>`;
+                }
+                
+                row.innerHTML = `
+                    <td>${date}</td>
+                    <td><i class="fas ${typeIcon} ${typeClass}"></i> ${transaction.type === 'income' ? 'إيراد' : 'مصروف'}</td>
+                    <td>${transaction.description}</td>
+                    <td class="${typeClass}">${transaction.amount.toLocaleString()} د.ج</td>
+                    <td>${statusBadge}</td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        }
+        
+        // Render financial charts
+        function renderFinancialCharts(data) {
+            // Financial chart (income vs expenses)
+            const financialCtx = document.getElementById('financialChart').getContext('2d');
+            new Chart(financialCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'],
+                    datasets: [
+                        {
+                            label: 'الإيرادات',
+                            data: data.monthlyIncome.map(item => item.total || 0),
+                            backgroundColor: 'rgba(46, 204, 113, 0.7)',
+                            borderColor: 'rgba(46, 204, 113, 1)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'المصروفات',
+                            data: data.monthlyExpenses.map(item => item.total || 0),
+                            backgroundColor: 'rgba(231, 76, 60, 0.7)',
+                            borderColor: 'rgba(231, 76, 60, 1)',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return value.toLocaleString() + ' د.ج';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            rtl: true
+                        },
+                        title: {
+                            display: true,
+                            text: 'الإيرادات والمصروفات خلال السنة'
+                        }
+                    }
+                }
+            });
+            
+            // Expenses chart
+            const expensesCtx = document.getElementById('expensesChart').getContext('2d');
+            new Chart(expensesCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(data.expensesByCategory),
+                    datasets: [{
+                        data: Object.values(data.expensesByCategory),
+                        backgroundColor: [
+                            'rgba(231, 76, 60, 0.7)',
+                            'rgba(241, 196, 15, 0.7)',
+                            'rgba(52, 152, 219, 0.7)',
+                            'rgba(155, 89, 182, 0.7)',
+                            'rgba(46, 204, 113, 0.7)',
+                            'rgba(230, 126, 34, 0.7)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'left',
+                            rtl: true
+                        },
+                        title: {
+                            display: true,
+                            text: 'توزيع المصروفات حسب الفئة'
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Show error message
+        function showError(message) {
+            // Create and show error alert
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-danger alert-dismissible fade show position-fixed';
+            alertDiv.style.top = '20px';
+            alertDiv.style.right = '20px';
+            alertDiv.style.zIndex = '9999';
+            alertDiv.style.minWidth = '300px';
+            alertDiv.innerHTML = `
+                <strong>خطأ!</strong> ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            document.body.appendChild(alertDiv);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 5000);
+        }
+    </script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

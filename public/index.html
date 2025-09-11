@@ -15,6 +15,7 @@
 
 <body>
     <div id="app">
+        
         <!-- Login Section (shown by default) -->
         <div id="login-section" class="login-container">
             <div class="login-logo">
@@ -113,6 +114,54 @@
 
         <!-- Main Application (hidden until login) -->
         <div id="main-app" style="display: none;">
+
+            <header class="app-header">
+                <div class="header-content">
+                    <div class="header-brand">
+                        <div class="header-logo">
+                            <img src="assets/logo.svg" alt="School Logo">
+                        </div>
+                        <div class="header-title">
+                            <h1>نظام إدارة المدارس</h1>
+                            <span>الإصدار 1.0.3</span>
+                        </div>
+                    </div>
+                    
+                    <div class="header-stats">
+                        <div class="stat-item">
+                            <div class="stat-value" id="stNum">0</div>
+                            <div class="stat-label">الطلاب</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="tNum">0</div>
+                            <div class="stat-label">المعلمين</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="lNum">0</div>
+                            <div class="stat-label">الحصص</div>
+                        </div>
+                    </div>
+                    
+                    <div class="header-actions">
+                        <div class="header-notifications">
+                            <button class="notification-btn">
+                                <i class="bi bi-bell"></i>
+                            </button>
+                            <span class="notification-badge">3</span>
+                        </div>
+                        
+                        <div class="header-user">
+                            <img src="https://ui-avatars.com/api/?name=User&background=random" class="user-avatar" id="header-user-avatar">
+                            <div class="user-info">
+                                <div class="user-name" id="header-user-name">المستخدم</div>
+                                <div class="user-role" id="header-user-role">الدور</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            
             <div class="container-fluid">
                 <div class="row">   
                     <!-- Sidebar -->

@@ -1,0 +1,2097 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام المحاسبة - إدارة المدرسة</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --accent-color: #e74c3c;
+            --light-color: #ecf0f1;
+            --dark-color: #2c3e50;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            color: #333;
+        }
+        
+        .sidebar {
+            background-color: var(--primary-color);
+            color: white;
+            height: 100vh;
+            position: fixed;
+            padding-top: 20px;
+            overflow-y: auto;
+        }
+        
+        .sidebar .nav-link {
+            color: rgba(255, 255, 255, 0.8);
+            padding: 12px 20px;
+            margin: 4px 0;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .sidebar .nav-link:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+            transform: translateX(-5px);
+        }
+        
+        .sidebar .nav-link.active {
+            background-color: rgba(255, 255, 255, 0.15);
+            border-right: 4px solid var(--accent-color);
+        }
+        
+        .sidebar .nav-link i {
+            margin-left: 10px;
+        }
+        
+        .main-content {
+            margin-right: 250px;
+            padding: 20px;
+            position: relative;
+            min-height: 100vh;
+        }
+        
+        .dashboard-card {
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s;
+        }
+        
+        .dashboard-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .card-income {
+            border-bottom: 4px solid #2ecc71;
+        }
+        
+        .card-expenses {
+            border-bottom: 4px solid #e74c3c;
+        }
+        
+        .card-balance {
+            border-bottom: 4px solid #3498db;
+        }
+        
+        .stat-number {
+            font-size: 1.8rem;
+            font-weight: bold;
+        }
+        
+        .table th {
+            background-color: var(--light-color);
+        }
+        
+        .btn-primary {
+            background-color: var(--secondary-color);
+            border-color: var(--secondary-color);
+        }
+        
+        .btn-primary:hover {
+            background-color: #2980b9;
+            border-color: #2980b9;
+        }
+        
+        .login-container {
+            max-width: 400px;
+            margin: 100px auto;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+            background-color: white;
+        }
+        
+        .section {
+    display: block;
+    opacity: 1;
+    position: relative;
+    width: 100%;
+    margin-bottom: 30px;
+}
+        
+.section.active {
+    display: block;
+    opacity: 1;
+    position: relative;
+}
+.section-separator {
+    border-bottom: 2px solid var(--light-color);
+    margin: 40px 0;
+    padding-bottom: 20px;
+}
+        .page-header {
+            border-bottom: 2px solid var(--light-color);
+            padding-bottom: 15px;
+            margin-bottom: 25px;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .invoice-template {
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin: 20px 0;
+            background-color: white;
+        }
+        
+        .invoice-header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #2c3e50;
+            padding-bottom: 10px;
+        }
+        
+        .invoice-details {
+            margin-bottom: 20px;
+        }
+        
+        .invoice-items {
+            margin-bottom: 20px;
+        }
+        
+        .invoice-total {
+            font-weight: bold;
+            font-size: 1.2em;
+            text-align: left;
+            border-top: 2px solid #2c3e50;
+            padding-top: 10px;
+        }
+        
+        .invoice-footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 0.9em;
+            color: #777;
+        }
+        
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            .invoice-template, .invoice-template * {
+                visibility: visible;
+            }
+            .invoice-template {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+            .no-print {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Section -->
+    <div id="login-section" class="section active">
+        <div class="login-container">
+            <h2 class="text-center mb-4">تسجيل الدخول - قسم المحاسبة</h2>
+            <form id="login-form">
+                <div class="mb-3">
+                    <label for="username" class="form-label">اسم المستخدم</label>
+                    <input type="text" class="form-control" id="username" required>
+                </div>
+                <div class="mb-3">
+                    <label for="password" class="form-label">كلمة المرور</label>
+                    <input type="password" class="form-control" id="password" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100" id="login-btn">
+                    <span id="login-text">تسجيل الدخول</span>
+                    <span id="login-loading" class="loading" style="display: none;"></span>
+                </button>
+            </form>
+            <div id="login-error" class="alert alert-danger mt-3" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="app-section" class="section">
+        <div class="sidebar">
+            <div class="text-center mb-4">
+                <h4>نظام المحاسبة</h4>
+                <p id="accounting-name" class="text-muted">مرحباً</p>
+            </div>
+            
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link active" data-section="dashboard">
+                        <i class="bi bi-speedometer2"></i> لوحة التحكم
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-section="payments">
+                        <i class="bi bi-cash-coin"></i> مدفوعات الطلاب
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-section="expenses">
+                        <i class="bi bi-wallet2"></i> المصروفات
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-section="teacher-payments">
+                        <i class="bi bi-people"></i> مدفوعات الأساتذة
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-section="reports">
+                        <i class="bi bi-graph-up"></i> التقارير
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-section="employees">
+                        <i class="bi bi-person-badge"></i> إدارة الموظفين
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" id="logout-btn" class="nav-link">
+                        <i class="bi bi-box-arrow-left"></i> تسجيل الخروج
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+        <div class="main-content">
+            <!-- Remove the sidebar -->
+            <div class="container-fluid">
+                <!-- Dashboard Section -->
+                <div id="dashboard" class="section">
+                    <div class="page-header">
+                        <h3>لوحة تحكم المحاسبة</h3>
+                        <p class="text-muted">نظرة عامة على الوضع المالي</p>
+                    </div>
+                    <!-- ... existing dashboard content ... -->
+                </div>
+                
+                <div class="section-separator"></div>
+                
+                <!-- Payments Section -->
+                <div id="payments" class="section">
+                    <div class="page-header">
+                        <h3>مدفوعات الطلاب</h3>
+                        <p class="text-muted">إدارة مدفوعات الرسوم الدراسية للطلاب</p>
+                    </div>
+                    <!-- ... existing payments content ... -->
+                </div>
+                
+                <div class="section-separator"></div>
+                
+                <!-- Expenses Section -->
+                <div id="expenses" class="section">
+                    <div class="page-header">
+                        <h3>إدارة المصروفات</h3>
+                        <p class="text-muted">تسجيل وتتبع المصروفات التشغيلية</p>
+                    </div>
+                    <!-- ... existing expenses content ... -->
+                </div>
+                
+                <div class="section-separator"></div>
+                
+                <!-- Teacher Payments Section -->
+                <div id="teacher-payments" class="section">
+                    <div class="page-header">
+                        <h3>مدفوعات الأساتذة</h3>
+                        <p class="text-muted">إدارة عمولات ومدفوعات الأساتذة</p>
+                    </div>
+                    <!-- ... existing teacher payments content ... -->
+                </div>
+                
+                <div class="section-separator"></div>
+                
+                <!-- Reports Section -->
+                <div id="reports" class="section">
+                    <div class="page-header">
+                        <h3>التقارير المالية</h3>
+                        <p class="text-muted">تقارير وتحليلات مالية مفصلة</p>
+                    </div>
+                    <!-- ... existing reports content ... -->
+                </div>
+                
+                <div class="section-separator"></div>
+                
+                <!-- Employees Section -->
+                <div id="employees" class="section">
+                    <div class="page-header">
+                        <h3>إدارة الموظفين</h3>
+                        <p class="text-muted">إضافة وإدارة موظفي المحاسبة</p>
+                    </div>
+                    <!-- ... existing employees content ... -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <!-- Add Payment Modal -->
+    <div class="modal fade" id="addPaymentModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">تسديد دفعة طالب</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="add-payment-form">
+                        <div class="mb-3">
+                            <label for="payment-student" class="form-label">الطالب</label>
+                            <select class="form-select" id="payment-student" required>
+                                <option value="">اختر الطالب...</option>
+                                <!-- Will be populated by JavaScript -->
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="payment-class" class="form-label">الحصة</label>
+                            <select class="form-select" id="payment-class" required>
+                                <option value="">اختر الحصة...</option>
+                                <!-- Will be populated by JavaScript -->
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="payment-month" class="form-label">الشهر</label>
+                            <input type="month" class="form-control" id="payment-month" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="payment-amount" class="form-label">المبلغ</label>
+                            <input type="number" class="form-control" id="payment-amount" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="payment-method" class="form-label">طريقة الدفع</label>
+                            <select class="form-select" id="payment-method" required>
+                                <option value="cash">نقدي</option>
+                                <option value="bank">تحويل بنكي</option>
+                                <option value="online">دفع إلكتروني</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="payment-date" class="form-label">تاريخ الدفع</label>
+                            <input type="date" class="form-control" id="payment-date" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="button" class="btn btn-primary" id="submit-payment-btn">تسديد الدفعة</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Expense Modal -->
+    <div class="modal fade" id="addExpenseModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">إضافة مصروف جديد</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="add-expense-form">
+                        <div class="mb-3">
+                            <label for="expense-description" class="form-label">وصف المصروف</label>
+                            <input type="text" class="form-control" id="expense-description" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="expense-amount" class="form-label">المبلغ</label>
+                            <input type="number" class="form-control" id="expense-amount" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="expense-category" class="form-label">الفئة</label>
+                            <select class="form-select" id="expense-category" required>
+                                <option value="">اختر الفئة...</option>
+                                <option value="rent">إيجار</option>
+                                <option value="utilities">مرافق</option>
+                                <option value="supplies">لوازم</option>
+                                <option value="maintenance">صيانة</option>
+                                <option value="marketing">تسويق</option>
+                                <option value="salaries">رواتب</option>
+                                <option value="other">أخرى</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="expense-type" class="form-label">النوع</label>
+                            <select class="form-select" id="expense-type" required>
+                                <option value="operational">تشغيلي</option>
+                                <option value="teacher_payment">دفع أستاذ</option>
+                                <option value="staff_salary">راتب موظف</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="expense-method" class="form-label">طريقة الدفع</label>
+                            <select class="form-select" id="expense-method" required>
+                                <option value="cash">نقدي</option>
+                                <option value="bank">تحويل بنكي</option>
+                                <option value="online">دفع إلكتروني</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="expense-date" class="form-label">التاريخ</label>
+                            <input type="date" class="form-control" id="expense-date" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="button" class="btn btn-primary" id="submit-expense-btn">إضافة المصروف</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Teacher Payment Modal -->
+    <div class="modal fade" id="addTeacherPaymentModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">تسديد عمولة أستاذ</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="add-teacher-payment-form">
+                        <div class="mb-3">
+                            <label for="teacher-payment-teacher" class="form-label">الأستاذ</label>
+                            <select class="form-select" id="teacher-payment-teacher" required>
+                                <option value="">اختر الأستاذ...</option>
+                                <!-- Will be populated by JavaScript -->
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="teacher-payment-student" class="form-label">الطالب</label>
+                            <select class="form-select" id="teacher-payment-student" required>
+                                <option value="">اختر الطالب...</option>
+                                <!-- Will be populated by JavaScript -->
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="teacher-payment-class" class="form-label">الحصة</label>
+                            <select class="form-select" id="teacher-payment-class" required>
+                                <option value="">اختر الحصة...</option>
+                                <!-- Will be populated by JavaScript -->
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="teacher-payment-month" class="form-label">الشهر</label>
+                            <input type="month" class="form-control" id="teacher-payment-month" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="teacher-payment-amount" class="form-label">المبلغ</label>
+                            <input type="number" class="form-control" id="teacher-payment-amount" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="teacher-payment-percentage" class="form-label">النسبة</label>
+                            <input type="number" class="form-control" id="teacher-payment-percentage" value="70" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="teacher-payment-method" class="form-label">طريقة الدفع</label>
+                            <select class="form-select" id="teacher-payment-method" required>
+                                <option value="cash">نقدي</option>
+                                <option value="bank">تحويل بنكي</option>
+                                <option value="online">دفع إلكتروني</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="teacher-payment-date" class="form-label">تاريخ الدفع</label>
+                            <input type="date" class="form-control" id="teacher-payment-date" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="button" class="btn btn-primary" id="submit-teacher-payment-btn">تسديد العمولة</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Employee Modal -->
+    <div class="modal fade" id="addEmployeeModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">إضافة موظف جديد</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="add-employee-form">
+                        <div class="mb-3">
+                            <label for="employee-username" class="form-label">اسم المستخدم</label>
+                            <input type="text" class="form-control" id="employee-username" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="employee-password" class="form-label">كلمة المرور</label>
+                            <input type="password" class="form-control" id="employee-password" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="employee-fullname" class="form-label">الاسم الكامل</label>
+                            <input type="text" class="form-control" id="employee-fullname" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="employee-role" class="form-label">الدور</label>
+                            <select class="form-select" id="employee-role" required>
+                                <option value="accountant">محاسب</option>
+                                <option value="admin">مدير</option>
+                                <option value="secretary">سكرتير</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="employee-email" class="form-label">البريد الإلكتروني</label>
+                            <input type="email" class="form-control" id="employee-email">
+                        </div>
+                        <div class="mb-3">
+                            <label for="employee-phone" class="form-label">الهاتف</label>
+                            <input type="tel" class="form-control" id="employee-phone">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="button" class="btn btn-primary" id="submit-employee-btn">إضافة الموظف</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Invoice Template (Hidden) -->
+    <div id="invoice-template" class="invoice-template" style="display: none;">
+        <div class="invoice-header">
+            <h2>فاتورة رسمية</h2>
+            <p>مدرسة الإبداع للتعليم</p>
+        </div>
+        
+        <div class="row invoice-details">
+            <div class="col-md-6">
+                <p><strong>رقم الفاتورة:</strong> <span id="invoice-number"></span></p>
+                <p><strong>التاريخ:</strong> <span id="invoice-date"></span></p>
+            </div>
+            <div class="col-md-6">
+                <p><strong>العميل:</strong> <span id="invoice-customer"></span></p>
+                <p><strong>نوع الفاتورة:</strong> <span id="invoice-type"></span></p>
+            </div>
+        </div>
+        
+        <div class="invoice-items">
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>الوصف</th>
+                        <th>المبلغ</th>
+                        <th>الكمية</th>
+                        <th>المجموع</th>
+                    </tr>
+                </thead>
+                <tbody id="invoice-items-body">
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="invoice-total">
+            <p>المبلغ الإجمالي: <span id="invoice-total-amount"></span> دينار جزائري</p>
+        </div>
+        
+        <div class="invoice-footer">
+            <p>شكراً لتعاملكم معنا</p>
+            <p>هاتف: 0123456789 | البريد الإلكتروني: info@school.com</p>
+        </div>
+        
+        <div class="text-center no-print mt-3">
+            <button class="btn btn-primary" onclick="window.print()">
+                <i class="bi bi-printer"></i> طباعة الفاتورة
+            </button>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Global variables
+        let authToken = null;
+        let currentUser = null;
+        let studentsList = [];
+        let teachersList = [];
+        let classesList = [];
+        
+        // DOM Ready
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if user is already logged in
+            const savedToken = localStorage.getItem('accounting_token');
+            const savedUser = localStorage.getItem('accounting_user');
+            
+            if (savedToken && savedUser) {
+                authToken = savedToken;
+                currentUser = JSON.parse(savedUser);
+                showApp();
+            }
+            
+            // Initialize event listeners
+            initEventListeners();
+            
+            // Initialize months for filters
+            initMonthFilters();
+            
+            // Initialize years for reports
+            initReportYears();
+        });
+
+        function initEventListeners() {
+            // Login form
+            document.getElementById('login-form').addEventListener('submit', handleLogin);
+            
+            // Logout button
+            document.getElementById('logout-btn').addEventListener('click', handleLogout);
+            
+            // Navigation
+            document.querySelectorAll('.nav-link[data-section]').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const sectionId = this.getAttribute('data-section');
+                    showSection(sectionId);
+                });
+            });
+            
+            // Filter buttons
+            const paymentFilterBtn = document.getElementById('payment-filter-btn');
+            if (paymentFilterBtn) {
+                paymentFilterBtn.addEventListener('click', loadPayments);
+            }
+            
+            const expenseFilterBtn = document.getElementById('expense-filter-btn');
+            if (expenseFilterBtn) {
+                expenseFilterBtn.addEventListener('click', loadExpenses);
+            }
+            
+            const teacherPaymentFilterBtn = document.getElementById('teacher-payment-filter-btn');
+            if (teacherPaymentFilterBtn) {
+                teacherPaymentFilterBtn.addEventListener('click', loadTeacherPayments);
+            }
+            
+            const employeeFilterBtn = document.getElementById('employee-filter-btn');
+            if (employeeFilterBtn) {
+                employeeFilterBtn.addEventListener('click', loadEmployees);
+            }
+            
+            const generateReportBtn = document.getElementById('generate-report-btn');
+            if (generateReportBtn) {
+                generateReportBtn.addEventListener('click', generateReport);
+            }
+            
+            // Form submission buttons
+            const submitPaymentBtn = document.getElementById('submit-payment-btn');
+            if (submitPaymentBtn) {
+                submitPaymentBtn.addEventListener('click', addPayment);
+            }
+            
+            const submitExpenseBtn = document.getElementById('submit-expense-btn');
+            if (submitExpenseBtn) {
+                submitExpenseBtn.addEventListener('click', addExpense);
+            }
+            
+            const submitTeacherPaymentBtn = document.getElementById('submit-teacher-payment-btn');
+            if (submitTeacherPaymentBtn) {
+                submitTeacherPaymentBtn.addEventListener('click', addTeacherPayment);
+            }
+            
+            const submitEmployeeBtn = document.getElementById('submit-employee-btn');
+            if (submitEmployeeBtn) {
+                submitEmployeeBtn.addEventListener('click', addEmployee);
+            }
+            
+            // Modal show events to load data
+            const addPaymentModal = document.getElementById('addPaymentModal');
+            if (addPaymentModal) {
+                addPaymentModal.addEventListener('show.bs.modal', function() {
+                    loadStudentsAndClasses();
+                });
+            }
+            
+            const addTeacherPaymentModal = document.getElementById('addTeacherPaymentModal');
+            if (addTeacherPaymentModal) {
+                addTeacherPaymentModal.addEventListener('show.bs.modal', function() {
+                    loadTeachersAndStudents();
+                });
+            }
+        }
+        
+        function initMonthFilters() {
+            const months = [
+                'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+                'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
+            ];
+            
+            const monthFilter = document.getElementById('payment-month-filter');
+            if (monthFilter) {
+                for (let i = 0; i < months.length; i++) {
+                    const monthValue = (i + 1).toString().padStart(2, '0');
+                    const option = document.createElement('option');
+                    option.value = monthValue;
+                    option.textContent = months[i];
+                    monthFilter.appendChild(option);
+                }
+            }
+        }
+        
+        function initReportYears() {
+            const yearSelect = document.getElementById('report-year');
+            if (yearSelect) {
+                const currentYear = new Date().getFullYear();
+                
+                for (let year = currentYear - 5; year <= currentYear + 1; year++) {
+                    const option = document.createElement('option');
+                    option.value = year;
+                    option.textContent = year;
+                    if (year === currentYear) option.selected = true;
+                    yearSelect.appendChild(option);
+                }
+            }
+        }
+        
+        async function handleLogin(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            // Show loading state
+            const loginText = document.getElementById('login-text');
+            const loginLoading = document.getElementById('login-loading');
+            
+            if (loginText && loginLoading) {
+                loginText.style.display = 'none';
+                loginLoading.style.display = 'inline-block';
+            }
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.token;
+                    currentUser = data.user;
+                    
+                    // Save to localStorage
+                    localStorage.setItem('accounting_token', authToken);
+                    localStorage.setItem('accounting_user', JSON.stringify(currentUser));
+                    
+                    showApp();
+                } else {
+                    showLoginError(data.error || 'فشل تسجيل الدخول');
+                }
+            } catch (error) {
+                showLoginError('خطأ في الاتصال بالخادم');
+            } finally {
+                // Hide loading state
+                if (loginText && loginLoading) {
+                    loginText.style.display = 'inline-block';
+                    loginLoading.style.display = 'none';
+                }
+            }
+        }
+        
+        function handleLogout() {
+            authToken = null;
+            currentUser = null;
+            localStorage.removeItem('accounting_token');
+            localStorage.removeItem('accounting_user');
+            showLogin();
+        }
+        
+        function showLoginError(message) {
+            const errorDiv = document.getElementById('login-error');
+            if (errorDiv) {
+                errorDiv.textContent = message;
+                errorDiv.style.display = 'block';
+                
+                setTimeout(() => {
+                    errorDiv.style.display = 'none';
+                }, 5000);
+            }
+        }
+        
+        function showLogin() {
+            const loginSection = document.getElementById('login-section');
+            const appSection = document.getElementById('app-section');
+            
+            if (loginSection) loginSection.classList.add('active');
+            if (appSection) appSection.classList.remove('active');
+        }
+        
+        function showApp() {
+            const loginSection = document.getElementById('login-section');
+            const appSection = document.getElementById('app-section');
+            
+            if (loginSection) loginSection.classList.remove('active');
+            if (appSection) appSection.classList.add('active');
+            
+            // Update user name
+            const accountingName = document.getElementById('accounting-name');
+            if (accountingName) {
+                accountingName.textContent = `مرحباً ${currentUser.fullName || currentUser.username}`;
+            }
+            
+            // Load initial data
+            loadDashboardData();
+        }
+        
+        function showSection(sectionId) {
+            // Hide all sections first
+            document.querySelectorAll('.section').forEach(section => {
+                section.classList.remove('active');
+            });
+            
+            // Show the requested section
+            const targetSection = document.getElementById(sectionId);
+            if (targetSection) {
+                targetSection.classList.add('active');
+            }
+            
+            // Update navbar
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            
+            const activeNavLink = document.querySelector(`.nav-link[data-section="${sectionId}"]`);
+            if (activeNavLink) {
+                activeNavLink.classList.add('active');
+            }
+            
+            // Load data based on section
+            switch(sectionId) {
+                case 'dashboard':
+                    loadDashboardData();
+                    break;
+                case 'payments':
+                    loadPayments();
+                    break;
+                case 'expenses':
+                    loadExpenses();
+                    break;
+                case 'teacher-payments':
+                    loadTeacherPayments();
+                    break;
+                case 'employees':
+                    loadEmployees();
+                    break;
+            }
+        }
+        
+        async function apiCall(url, options = {}) {
+            if (!options.headers) {
+                options.headers = {};
+            }
+            
+            options.headers['Authorization'] = `Bearer ${authToken}`;
+            
+            if (options.body && typeof options.body !== 'string') {
+                options.body = JSON.stringify(options.body);
+                options.headers['Content-Type'] = 'application/json';
+            }
+            
+            const response = await fetch(url, options);
+            
+            if (response.status === 401) {
+                handleLogout();
+                throw new Error('غير مصرح');
+            }
+            
+            return response;
+        }
+        
+        async function loadDashboardData() {
+            try {
+                // Load today's stats
+                const today = new Date();
+                const year = today.getFullYear();
+                const month = (today.getMonth() + 1).toString().padStart(2, '0');
+                
+                // Get transactions for the current month
+                const startDate = `${year}-${month}-01`;
+                const endDate = `${year}-${month}-31`;
+                
+                const transactionsResponse = await apiCall(`/api/accounting/transactions?startDate=${startDate}&endDate=${endDate}`);
+                const transactionsData = await transactionsResponse.json();
+                
+                // Calculate totals
+                let incomeTotal = 0;
+                let expensesTotal = 0;
+                
+                transactionsData.forEach(transaction => {
+                    if (transaction.type === 'income') {
+                        incomeTotal += transaction.amount;
+                    } else {
+                        expensesTotal += transaction.amount;
+                    }
+                });
+                
+                const totalIncome = document.getElementById('total-income');
+                const totalExpenses = document.getElementById('total-expenses');
+                const currentBalance = document.getElementById('current-balance');
+                
+                if (totalIncome) totalIncome.textContent = `${incomeTotal.toLocaleString()} د.ج`;
+                if (totalExpenses) totalExpenses.textContent = `${expensesTotal.toLocaleString()} د.ج`;
+                if (currentBalance) currentBalance.textContent = `${(incomeTotal - expensesTotal).toLocaleString()} د.ج`;
+                
+                // Show recent transactions (last 5)
+                const recentTransactions = transactionsData.slice(0, 5);
+                const transactionsTable = document.getElementById('recent-transactions');
+                
+                if (transactionsTable) {
+                    transactionsTable.innerHTML = '';
+                    
+                    if (recentTransactions.length === 0) {
+                        transactionsTable.innerHTML = '<tr><td colspan="4" class="text-center">لا توجد معاملات</td></tr>';
+                    } else {
+                        recentTransactions.forEach(transaction => {
+                            const row = document.createElement('tr');
+                            
+                            const dateCell = document.createElement('td');
+                            dateCell.textContent = new Date(transaction.date).toLocaleDateString('ar-EG');
+                            
+                            const descCell = document.createElement('td');
+                            descCell.textContent = transaction.description;
+                            
+                            const amountCell = document.createElement('td');
+                            amountCell.textContent = `${transaction.amount.toLocaleString()} د.ج`;
+                            
+                            const typeCell = document.createElement('td');
+                            typeCell.textContent = transaction.type === 'income' ? 'إيراد' : 'مصروف';
+                            typeCell.className = transaction.type === 'income' ? 'text-success' : 'text-danger';
+                            
+                            row.appendChild(dateCell);
+                            row.appendChild(descCell);
+                            row.appendChild(amountCell);
+                            row.appendChild(typeCell);
+                            
+                            transactionsTable.appendChild(row);
+                        });
+                    }
+                }
+                
+                // Load expenses by category for chart
+                const expensesResponse = await apiCall(`/api/accounting/expenses?startDate=${startDate}&endDate=${endDate}`);
+                const expensesData = await expensesResponse.json();
+                
+                // Group expenses by category
+                const expensesByCategory = {};
+                expensesData.forEach(expense => {
+                    if (!expensesByCategory[expense.category]) {
+                        expensesByCategory[expense.category] = 0;
+                    }
+                    expensesByCategory[expense.category] += expense.amount;
+                });
+                
+                // Prepare data for chart
+                const categories = Object.keys(expensesByCategory);
+                const amounts = Object.values(expensesByCategory);
+                
+                renderExpensesChart(categories, amounts);
+                
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+                const transactionsTable = document.getElementById('recent-transactions');
+                if (transactionsTable) {
+                    transactionsTable.innerHTML = '<tr><td colspan="4" class="text-center text-danger">فشل تحميل البيانات</td></tr>';
+                }
+            }
+        }
+        
+        function renderExpensesChart(categories, amounts) {
+            const ctx = document.getElementById('expensesChart');
+            if (!ctx) return;
+            
+            const categoryLabels = categories.map(cat => {
+                const categoryMap = {
+                    'rent': 'إيجار',
+                    'utilities': 'مرافق',
+                    'supplies': 'لوازم',
+                    'maintenance': 'صيانة',
+                    'marketing': 'تسويق',
+                    'salaries': 'رواتب',
+                    'other': 'أخرى'
+                };
+                return categoryMap[cat] || cat;
+            });
+            
+            new Chart(ctx.getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: categoryLabels,
+                    datasets: [{
+                        data: amounts,
+                        backgroundColor: [
+                            '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0',
+                            '#9966FF', '#FF9F40', '#C9CBCF'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            rtl: true
+                        }
+                    }
+                }
+            });
+        }
+        
+        async function loadPayments() {
+            try {
+                // Build query string
+                const paymentSearch = document.getElementById('payment-search');
+                const paymentStatusFilter = document.getElementById('payment-status-filter');
+                const paymentMonthFilter = document.getElementById('payment-month-filter');
+                const paymentsTable = document.getElementById('payments-table-body');
+                
+                if (!paymentSearch || !paymentStatusFilter || !paymentMonthFilter || !paymentsTable) {
+                    console.error('عناصر DOM الخاصة بالمدفوعات غير موجودة');
+                    return;
+                }
+                
+                const search = paymentSearch.value;
+                const status = paymentStatusFilter.value;
+                const monthFilter = paymentMonthFilter.value;
+                
+                let url = '/api/payments?';
+                if (search) url += `student=${search}&`;
+                if (status) url += `status=${status}&`;
+                if (monthFilter) {
+                    const year = new Date().getFullYear();
+                    url += `month=${year}-${monthFilter}&`;
+                }
+                
+                const response = await apiCall(url);
+                const paymentsData = await response.json();
+                
+                paymentsTable.innerHTML = '';
+                
+                if (paymentsData.length === 0) {
+                    paymentsTable.innerHTML = '<tr><td colspan="7" class="text-center">لا توجد مدفوعات</td></tr>';
+                    return;
+                }
+                
+                paymentsData.forEach(payment => {
+                    const row = document.createElement('tr');
+                    
+                    const studentCell = document.createElement('td');
+                    studentCell.textContent = payment.student?.name || 'غير معروف';
+                    
+                    const classCell = document.createElement('td');
+                    classCell.textContent = payment.class?.name || 'غير معروف';
+                    
+                    const monthCell = document.createElement('td');
+                    monthCell.textContent = payment.month;
+                    
+                    const amountCell = document.createElement('td');
+                    amountCell.textContent = `${payment.amount.toLocaleString()} د.ج`;
+                    
+                    const statusCell = document.createElement('td');
+                    statusCell.textContent = getStatusText(payment.status);
+                    statusCell.className = getStatusClass(payment.status);
+                    
+                    const dateCell = document.createElement('td');
+                    dateCell.textContent = payment.paymentDate ? 
+                        new Date(payment.paymentDate).toLocaleDateString('ar-EG') : 'لم يتم الدفع';
+                    
+                    const actionsCell = document.createElement('td');
+                    if (payment.status !== 'paid') {
+                        const payButton = document.createElement('button');
+                        payButton.className = 'btn btn-sm btn-success';
+                        payButton.innerHTML = '<i class="bi bi-cash"></i>';
+                        payButton.title = 'تسديد الدفعة';
+                        payButton.addEventListener('click', () => markPaymentAsPaid(payment._id));
+                        actionsCell.appendChild(payButton);
+                    } else {
+                        const invoiceButton = document.createElement('button');
+                        invoiceButton.className = 'btn btn-sm btn-info';
+                        invoiceButton.innerHTML = '<i class="bi bi-receipt"></i>';
+                        invoiceButton.title = 'طباعة الفاتورة';
+                        invoiceButton.addEventListener('click', () => generateInvoice('payment', payment._id));
+                        actionsCell.appendChild(invoiceButton);
+                    }
+                    
+                    row.appendChild(studentCell);
+                    row.appendChild(classCell);
+                    row.appendChild(monthCell);
+                    row.appendChild(amountCell);
+                    row.appendChild(statusCell);
+                    row.appendChild(dateCell);
+                    row.appendChild(actionsCell);
+                    
+                    paymentsTable.appendChild(row);
+                });
+                
+            } catch (error) {
+                console.error('Error loading payments:', error);
+                const paymentsTable = document.getElementById('payments-table-body');
+                if (paymentsTable) {
+                    paymentsTable.innerHTML = '<tr><td colspan="7" class="text-center text-danger">فشل تحميل البيانات</td></tr>';
+                }
+            }
+        }
+        
+        async function markPaymentAsPaid(paymentId) {
+            try {
+                const response = await apiCall(`/api/payments/${paymentId}/pay`, {
+                    method: 'PUT',
+                    body: {
+                        paymentDate: new Date().toISOString().split('T')[0],
+                        paymentMethod: 'cash'
+                    }
+                });
+                
+                if (response.ok) {
+                    alert('تم تسديد الدفعة بنجاح');
+                    loadPayments();
+                    loadDashboardData(); // Refresh dashboard
+                } else {
+                    const errorData = await response.json();
+                    alert(errorData.error || 'فشل تسديد الدفعة');
+                }
+            } catch (error) {
+                console.error('Error marking payment as paid:', error);
+                alert('فشل تسديد الدفعة');
+            }
+        }
+        
+        async function loadExpenses() {
+            try {
+                const expenseSearch = document.getElementById('expense-search');
+                const expenseCategoryFilter = document.getElementById('expense-category-filter');
+                const expenseDateFilter = document.getElementById('expense-date-filter');
+                const expensesTable = document.getElementById('expenses-table-body');
+                
+                if (!expenseSearch || !expenseCategoryFilter || !expenseDateFilter || !expensesTable) {
+                    console.error('عناصر DOM الخاصة بالمصروفات غير موجودة');
+                    return;
+                }
+                
+                const search = expenseSearch.value;
+                const category = expenseCategoryFilter.value;
+                const date = expenseDateFilter.value;
+                
+                let url = '/api/accounting/expenses?';
+                if (search) url += `description=${search}&`;
+                if (category) url += `category=${category}&`;
+                if (date) url += `date=${date}&`;
+                
+                const response = await apiCall(url);
+                const expensesData = await response.json();
+                
+                expensesTable.innerHTML = '';
+                
+                if (expensesData.length === 0) {
+                    expensesTable.innerHTML = '<tr><td colspan="7" class="text-center">لا توجد مصروفات</td></tr>';
+                    return;
+                }
+                
+                expensesData.forEach(expense => {
+                    const row = document.createElement('tr');
+                    
+                    const dateCell = document.createElement('td');
+                    dateCell.textContent = new Date(expense.date).toLocaleDateString('ar-EG');
+                    
+                    const descCell = document.createElement('td');
+                    descCell.textContent = expense.description;
+                    
+                    const categoryCell = document.createElement('td');
+                    categoryCell.textContent = getCategoryText(expense.category);
+                    
+                    const amountCell = document.createElement('td');
+                    amountCell.textContent = `${expense.amount.toLocaleString()} د.ج`;
+                    
+                    const methodCell = document.createElement('td');
+                    methodCell.textContent = getPaymentMethodText(expense.paymentMethod);
+                    
+                    const recordedByCell = document.createElement('td');
+                    recordedByCell.textContent = expense.recordedBy?.username || 'نظام';
+                    
+                    const actionsCell = document.createElement('td');
+                    const editButton = document.createElement('button');
+                    editButton.className = 'btn btn-sm btn-primary me-1';
+                    editButton.innerHTML = '<i class="bi bi-pencil"></i>';
+                    editButton.title = 'تعديل';
+                    
+                    const deleteButton = document.createElement('button');
+                    deleteButton.className = 'btn btn-sm btn-danger';
+                    deleteButton.innerHTML = '<i class="bi bi-trash"></i>';
+                    deleteButton.title = 'حذف';
+                    
+                    actionsCell.appendChild(editButton);
+                    actionsCell.appendChild(deleteButton);
+                    
+                    row.appendChild(dateCell);
+                    row.appendChild(descCell);
+                    row.appendChild(categoryCell);
+                    row.appendChild(amountCell);
+                    row.appendChild(methodCell);
+                    row.appendChild(recordedByCell);
+                    row.appendChild(actionsCell);
+                    
+                    expensesTable.appendChild(row);
+                });
+                
+            } catch (error) {
+                console.error('Error loading expenses:', error);
+                const expensesTable = document.getElementById('expenses-table-body');
+                if (expensesTable) {
+                    expensesTable.innerHTML = '<tr><td colspan="7" class="text-center text-danger">فشل تحميل البيانات</td></tr>';
+                }
+            }
+        }
+        
+        async function loadTeacherPayments() {
+            try {
+                const teacherPaymentSearch = document.getElementById('teacher-payment-search');
+                const teacherPaymentStatusFilter = document.getElementById('teacher-payment-status-filter');
+                const teacherPaymentMonthFilter = document.getElementById('teacher-payment-month-filter');
+                const teacherPaymentsTable = document.getElementById('teacher-payments-table-body');
+                
+                if (!teacherPaymentSearch || !teacherPaymentStatusFilter || !teacherPaymentMonthFilter || !teacherPaymentsTable) {
+                    console.error('عناصر DOM الخاصة بمدفوعات الأساتذة غير موجودة');
+                    return;
+                }
+                
+                const search = teacherPaymentSearch.value;
+                const status = teacherPaymentStatusFilter.value;
+                const month = teacherPaymentMonthFilter.value;
+                
+                let url = '/api/accounting/teacher-commissions?';
+                if (search) url += `teacher=${search}&`;
+                if (status) url += `status=${status}&`;
+                if (month) url += `month=${month}&`;
+                
+                const response = await apiCall(url);
+                const paymentsData = await response.json();
+                
+                teacherPaymentsTable.innerHTML = '';
+                
+                if (paymentsData.length === 0) {
+                    teacherPaymentsTable.innerHTML = '<tr><td colspan="9" class="text-center">لا توجد عمولات</td></tr>';
+                    return;
+                }
+                
+                paymentsData.forEach(payment => {
+                    const row = document.createElement('tr');
+                    
+                    const teacherCell = document.createElement('td');
+                    teacherCell.textContent = payment.teacher?.name || 'غير معروف';
+                    
+                    const studentCell = document.createElement('td');
+                    studentCell.textContent = payment.student?.name || 'غير معروف';
+                    
+                    const classCell = document.createElement('td');
+                    classCell.textContent = payment.class?.name || 'غير معروف';
+                    
+                    const monthCell = document.createElement('td');
+                    monthCell.textContent = payment.month;
+                    
+                    const amountCell = document.createElement('td');
+                    amountCell.textContent = `${payment.amount.toLocaleString()} د.ج`;
+                    
+                    const percentageCell = document.createElement('td');
+                    percentageCell.textContent = `${payment.percentage}%`;
+                    
+                    const statusCell = document.createElement('td');
+                    statusCell.textContent = payment.status === 'paid' ? 'مدفوع' : 'قيد الانتظار';
+                    statusCell.className = payment.status === 'paid' ? 'text-success' : 'text-warning';
+                    
+                    const dateCell = document.createElement('td');
+                    dateCell.textContent = payment.paymentDate ? 
+                        new Date(payment.paymentDate).toLocaleDateString('ar-EG') : 'لم يتم الدفع';
+                    
+                    const actionsCell = document.createElement('td');
+                    if (payment.status !== 'paid') {
+                        const payButton = document.createElement('button');
+                        payButton.className = 'btn btn-sm btn-success';
+                        payButton.innerHTML = '<i class="bi bi-cash"></i>';
+                        payButton.title = 'تسديد العمولة';
+                        payButton.addEventListener('click', () => payTeacherCommission(payment._id));
+                        actionsCell.appendChild(payButton);
+                    } else {
+                        const invoiceButton = document.createElement('button');
+                        invoiceButton.className = 'btn btn-sm btn-info';
+                        invoiceButton.innerHTML = '<i class="bi bi-receipt"></i>';
+                        invoiceButton.title = 'طباعة الفاتورة';
+                        invoiceButton.addEventListener('click', () => generateInvoice('teacher', payment._id));
+                        actionsCell.appendChild(invoiceButton);
+                    }
+                    
+                    row.appendChild(teacherCell);
+                    row.appendChild(studentCell);
+                    row.appendChild(classCell);
+                    row.appendChild(monthCell);
+                    row.appendChild(amountCell);
+                    row.appendChild(percentageCell);
+                    row.appendChild(statusCell);
+                    row.appendChild(dateCell);
+                    row.appendChild(actionsCell);
+                    
+                    teacherPaymentsTable.appendChild(row);
+                });
+                
+            } catch (error) {
+                console.error('Error loading teacher payments:', error);
+                const teacherPaymentsTable = document.getElementById('teacher-payments-table-body');
+                if (teacherPaymentsTable) {
+                    teacherPaymentsTable.innerHTML = '<tr><td colspan="9" class="text-center text-danger">فشل تحميل البيانات</td></tr>';
+                }
+            }
+        }
+        
+        async function payTeacherCommission(commissionId) {
+            try {
+                const response = await apiCall(`/api/accounting/teacher-commissions/pay`, {
+                    method: 'POST',
+                    body: {
+                        commissionId,
+                        paymentMethod: 'cash',
+                        paymentDate: new Date().toISOString().split('T')[0]
+                    }
+                });
+                
+                if (response.ok) {
+                    alert('تم تسديد عمولة الأستاذ بنجاح');
+                    loadTeacherPayments();
+                    loadDashboardData(); // Refresh dashboard
+                } else {
+                    const errorData = await response.json();
+                    alert(errorData.error || 'فشل تسديد العمولة');
+                }
+            } catch (error) {
+                console.error('Error paying teacher commission:', error);
+                alert('فشل تسديد العمولة');
+            }
+        }
+        
+        async function loadEmployees() {
+            try {
+                const employeeSearch = document.getElementById('employee-search');
+                const employeeRoleFilter = document.getElementById('employee-role-filter');
+                const employeesTable = document.getElementById('employees-table-body');
+                
+                if (!employeeSearch || !employeeRoleFilter || !employeesTable) {
+                    console.error('عناصر DOM الخاصة بالموظفين غير موجودة');
+                    return;
+                }
+                
+                const search = employeeSearch.value;
+                const role = employeeRoleFilter.value;
+                
+                let url = '/api/employees?';
+                if (search) url += `search=${search}&`;
+                if (role) url += `role=${role}&`;
+                
+                const response = await apiCall(url);
+                const employeesData = await response.json();
+                
+                employeesTable.innerHTML = '';
+                
+                if (employeesData.length === 0) {
+                    employeesTable.innerHTML = '<tr><td colspan="7" class="text-center">لا توجد سجلات</td></tr>';
+                    return;
+                }
+                
+                employeesData.forEach(employee => {
+                    const row = document.createElement('tr');
+                    
+                    const usernameCell = document.createElement('td');
+                    usernameCell.textContent = employee.username;
+                    
+                    const fullnameCell = document.createElement('td');
+                    fullnameCell.textContent = employee.fullName || 'غير معروف';
+                    
+                    const roleCell = document.createElement('td');
+                    roleCell.textContent = getRoleText(employee.role);
+                    
+                    const emailCell = document.createElement('td');
+                    emailCell.textContent = employee.email || 'غير معروف';
+                    
+                    const phoneCell = document.createElement('td');
+                    phoneCell.textContent = employee.phone || 'غير معروف';
+                    
+                    const statusCell = document.createElement('td');
+                    statusCell.textContent = employee.active ? 'نشط' : 'غير نشط';
+                    statusCell.className = employee.active ? 'text-success' : 'text-danger';
+                    
+                    const actionsCell = document.createElement('td');
+                    const editButton = document.createElement('button');
+                    editButton.className = 'btn btn-sm btn-primary me-1';
+                    editButton.innerHTML = '<i class="bi bi-pencil"></i>';
+                    editButton.title = 'تعديل';
+                    
+                    const toggleButton = document.createElement('button');
+                    toggleButton.className = 'btn btn-sm ' + (employee.active ? 'btn-warning' : 'btn-success');
+                    toggleButton.innerHTML = employee.active ? '<i class="bi bi-x-circle"></i>' : '<i class="bi bi-check-circle"></i>';
+                    toggleButton.title = employee.active ? 'تعطيل' : 'تفعيل';
+                    toggleButton.addEventListener('click', () => toggleEmployeeStatus(employee._id, employee.active));
+                    
+                    actionsCell.appendChild(editButton);
+                    actionsCell.appendChild(toggleButton);
+                    
+                    row.appendChild(usernameCell);
+                    row.appendChild(fullnameCell);
+                    row.appendChild(roleCell);
+                    row.appendChild(emailCell);
+                    row.appendChild(phoneCell);
+                    row.appendChild(statusCell);
+                    row.appendChild(actionsCell);
+                    
+                    employeesTable.appendChild(row);
+                });
+                
+            } catch (error) {
+                console.error('Error loading employees:', error);
+                const employeesTable = document.getElementById('employees-table-body');
+                if (employeesTable) {
+                    employeesTable.innerHTML = '<tr><td colspan="7" class="text-center text-danger">فشل تحميل البيانات</td></tr>';
+                }
+            }
+        }
+        
+        async function toggleEmployeeStatus(employeeId, isActive) {
+            try {
+                const response = await apiCall(`/api/users/${employeeId}/status`, {
+                    method: 'PUT',
+                    body: { active: !isActive }
+                });
+                
+                if (response.ok) {
+                    alert(`${!isActive ? 'تم تفعيل' : 'تم تعطيل'} الحساب بنجاح`);
+                    loadEmployees();
+                } else {
+                    const errorData = await response.json();
+                    alert(errorData.error || 'فشل تعديل حالة الحساب');
+                }
+            } catch (error) {
+                console.error('Error toggling employee status:', error);
+                alert('فشل تعديل حالة الحساب');
+            }
+        }
+        
+        async function generateReport() {
+            try {
+                const reportYear = document.getElementById('report-year');
+                const reportMonth = document.getElementById('report-month');
+                const reportDetailsTable = document.getElementById('report-details-table');
+                
+                if (!reportYear || !reportMonth || !reportDetailsTable) {
+                    console.error('عناصر DOM الخاصة بالتقرير غير موجودة');
+                    return;
+                }
+                
+                const year = reportYear.value;
+                const month = reportMonth.value;
+                
+                let startDate, endDate;
+                if (month) {
+                    startDate = `${year}-${month}-01`;
+                    endDate = `${year}-${month}-31`;
+                } else {
+                    startDate = `${year}-01-01`;
+                    endDate = `${year}-12-31`;
+                }
+                
+                const response = await apiCall(`/api/accounting/transactions?startDate=${startDate}&endDate=${endDate}`);
+                const transactionsData = await response.json();
+                
+                // Prepare data for charts
+                const monthlyData = prepareMonthlyData(transactionsData, year, month);
+                const categoryData = prepareCategoryData(transactionsData);
+                
+                // Render charts
+                renderMonthlyReportChart(monthlyData);
+                renderExpenseDistributionChart(categoryData.expenses);
+                
+                // Render details table
+                reportDetailsTable.innerHTML = '';
+                
+                if (transactionsData.length === 0) {
+                    reportDetailsTable.innerHTML = '<tr><td colspan="5" class="text-center">لا توجد معاملات في الفترة المحددة</td></tr>';
+                    return;
+                }
+                
+                transactionsData.forEach(transaction => {
+                    const row = document.createElement('tr');
+                    
+                    const dateCell = document.createElement('td');
+                    dateCell.textContent = new Date(transaction.date).toLocaleDateString('ar-EG');
+                    
+                    const typeCell = document.createElement('td');
+                    typeCell.textContent = transaction.type === 'income' ? 'إيراد' : 'مصروف';
+                    
+                    const descCell = document.createElement('td');
+                    descCell.textContent = transaction.description;
+                    
+                    const categoryCell = document.createElement('td');
+                    categoryCell.textContent = getCategoryText(transaction.category);
+                    
+                    const amountCell = document.createElement('td');
+                    amountCell.textContent = `${transaction.amount.toLocaleString()} د.ج`;
+                    amountCell.className = transaction.type === 'income' ? 'text-success' : 'text-danger';
+                    
+                    row.appendChild(dateCell);
+                    row.appendChild(typeCell);
+                    row.appendChild(descCell);
+                    row.appendChild(categoryCell);
+                    row.appendChild(amountCell);
+                    
+                    reportDetailsTable.appendChild(row);
+                });
+                
+            } catch (error) {
+                console.error('Error generating report:', error);
+                const reportDetailsTable = document.getElementById('report-details-table');
+                if (reportDetailsTable) {
+                    reportDetailsTable.innerHTML = '<tr><td colspan="5" class="text-center text-danger">فشل تحميل التقرير</td></tr>';
+                }
+            }
+        }
+        
+        function prepareMonthlyData(transactions, year, month) {
+            // Initialize monthly data structure
+            const months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
+            const monthlyData = {
+                income: Array(12).fill(0),
+                expenses: Array(12).fill(0),
+                labels: ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر']
+            };
+            
+            // If a specific month is selected, adjust the data structure
+            if (month) {
+                const monthIndex = parseInt(month) - 1;
+                monthlyData.income = [0];
+                monthlyData.expenses = [0];
+                monthlyData.labels = [monthlyData.labels[monthIndex]];
+                
+                // Filter transactions for the specific month
+                transactions = transactions.filter(t => {
+                    const transactionDate = new Date(t.date);
+                    return transactionDate.getMonth() === monthIndex && transactionDate.getFullYear() === parseInt(year);
+                });
+            }
+            
+            // Aggregate data by month
+            transactions.forEach(transaction => {
+                const transactionDate = new Date(transaction.date);
+                const monthIndex = transactionDate.getMonth();
+                
+                if (transaction.type === 'income') {
+                    if (month) {
+                        monthlyData.income[0] += transaction.amount;
+                    } else {
+                        monthlyData.income[monthIndex] += transaction.amount;
+                    }
+                } else {
+                    if (month) {
+                        monthlyData.expenses[0] += transaction.amount;
+                    } else {
+                        monthlyData.expenses[monthIndex] += transaction.amount;
+                    }
+                }
+            });
+            
+            return monthlyData;
+        }
+        
+        function prepareCategoryData(transactions) {
+            const categories = {
+                income: {},
+                expenses: {}
+            };
+            
+            transactions.forEach(transaction => {
+                const category = transaction.category || 'other';
+                
+                if (transaction.type === 'income') {
+                    if (!categories.income[category]) {
+                        categories.income[category] = 0;
+                    }
+                    categories.income[category] += transaction.amount;
+                } else {
+                    if (!categories.expenses[category]) {
+                        categories.expenses[category] = 0;
+                    }
+                    categories.expenses[category] += transaction.amount;
+                }
+            });
+            
+            return categories;
+        }
+        
+        function renderMonthlyReportChart(monthlyData) {
+            const ctx = document.getElementById('monthlyReportChart');
+            if (!ctx) return;
+            
+            new Chart(ctx.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: monthlyData.labels,
+                    datasets: [
+                        {
+                            label: 'الإيرادات',
+                            data: monthlyData.income,
+                            backgroundColor: '#2ecc71'
+                        },
+                        {
+                            label: 'المصروفات',
+                            data: monthlyData.expenses,
+                            backgroundColor: '#e74c3c'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            rtl: true
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+        
+        function renderExpenseDistributionChart(expensesData) {
+            const ctx = document.getElementById('expenseDistributionChart');
+            if (!ctx) return;
+            
+            const categories = Object.keys(expensesData);
+            const amounts = Object.values(expensesData);
+            
+            const categoryLabels = categories.map(cat => getCategoryText(cat));
+            
+            new Chart(ctx.getContext('2d'), {
+                type: 'pie',
+                data: {
+                    labels: categoryLabels,
+                    datasets: [{
+                        data: amounts,
+                        backgroundColor: [
+                            '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0',
+                            '#9966FF', '#FF9F40', '#C9CBCF'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            rtl: true
+                        }
+                    }
+                }
+            });
+        }
+        
+        async function loadStudentsAndClasses() {
+            try {
+                // Load students
+                const studentsResponse = await apiCall('/api/students?active=true');
+                studentsList = await studentsResponse.json();
+                
+                const studentSelect = document.getElementById('payment-student');
+                studentSelect.innerHTML = '<option value="">اختر الطالب...</option>';
+                
+                studentsList.forEach(student => {
+                    const option = document.createElement('option');
+                    option.value = student._id;
+                    option.textContent = student.name;
+                    studentSelect.appendChild(option);
+                });
+                
+                // Load classes
+                const classesResponse = await apiCall('/api/classes');
+                classesList = await classesResponse.json();
+                
+                const classSelect = document.getElementById('payment-class');
+                classSelect.innerHTML = '<option value="">اختر الحصة...</option>';
+                
+                classesList.forEach(cls => {
+                    const option = document.createElement('option');
+                    option.value = cls._id;
+                    option.textContent = `${cls.name} - ${cls.subject} (${cls.academicYear})`;
+                    option.dataset.price = cls.price;
+                    classSelect.appendChild(option);
+                });
+                
+                // Auto-fill amount when class is selected
+                classSelect.addEventListener('change', function() {
+                    const selectedOption = this.options[this.selectedIndex];
+                    if (selectedOption && selectedOption.dataset.price) {
+                        document.getElementById('payment-amount').value = selectedOption.dataset.price;
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Error loading students and classes:', error);
+                alert('فشل تحميل قائمة الطلاب والحصص');
+            }
+        }
+        
+        async function loadTeachersAndStudents() {
+            try {
+                // Load teachers
+                const teachersResponse = await apiCall('/api/teachers?active=true');
+                teachersList = await teachersResponse.json();
+                
+                const teacherSelect = document.getElementById('teacher-payment-teacher');
+                teacherSelect.innerHTML = '<option value="">اختر الأستاذ...</option>';
+                
+                teachersList.forEach(teacher => {
+                    const option = document.createElement('option');
+                    option.value = teacher._id;
+                    option.textContent = teacher.name;
+                    teacherSelect.appendChild(option);
+                });
+                
+                // Load students
+                const studentsResponse = await apiCall('/api/students?active=true');
+                studentsList = await studentsResponse.json();
+                
+                const studentSelect = document.getElementById('teacher-payment-student');
+                studentSelect.innerHTML = '<option value="">اختر الطالب...</option>';
+                
+                studentsList.forEach(student => {
+                    const option = document.createElement('option');
+                    option.value = student._id;
+                    option.textContent = student.name;
+                    studentSelect.appendChild(option);
+                });
+                
+                // Load classes
+                const classesResponse = await apiCall('/api/classes');
+                classesList = await classesResponse.json();
+                
+                const classSelect = document.getElementById('teacher-payment-class');
+                classSelect.innerHTML = '<option value="">اختر الحصة...</option>';
+                
+                classesList.forEach(cls => {
+                    const option = document.createElement('option');
+                    option.value = cls._id;
+                    option.textContent = `${cls.name} - ${cls.subject} (${cls.academicYear})`;
+                    option.dataset.price = cls.price;
+                    classSelect.appendChild(option);
+                });
+                
+                // Auto-calculate teacher's share when class is selected
+                classSelect.addEventListener('change', function() {
+                    const selectedOption = this.options[this.selectedIndex];
+                    if (selectedOption && selectedOption.dataset.price) {
+                        const classPrice = parseFloat(selectedOption.dataset.price);
+                        const teacherShare = classPrice * 0.7; // 70% for teacher
+                        document.getElementById('teacher-payment-amount').value = teacherShare.toFixed(2);
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Error loading teachers and students:', error);
+                alert('فشل تحميل قائمة الأساتذة والطلاب');
+            }
+        }
+        
+        async function addPayment() {
+            try {
+                const studentId = document.getElementById('payment-student').value;
+                const classId = document.getElementById('payment-class').value;
+                const month = document.getElementById('payment-month').value;
+                const amount = document.getElementById('payment-amount').value;
+                const method = document.getElementById('payment-method').value;
+                const date = document.getElementById('payment-date').value;
+                
+                const response = await apiCall('/api/payments', {
+                    method: 'POST',
+                    body: {
+                        student: studentId,
+                        class: classId,
+                        month,
+                        amount: parseFloat(amount),
+                        paymentMethod: method,
+                        paymentDate: date
+                    }
+                });
+                
+                if (response.ok) {
+                    alert('تم إضافة الدفعة بنجاح');
+                    $('#addPaymentModal').modal('hide');
+                    loadPayments();
+                    loadDashboardData();
+                } else {
+                    const errorData = await response.json();
+                    alert(errorData.error || 'فشل إضافة الدفعة');
+                }
+            } catch (error) {
+                console.error('Error adding payment:', error);
+                alert('فشل إضافة الدفعة');
+            }
+        }
+        
+        async function addExpense() {
+            try {
+                const description = document.getElementById('expense-description').value;
+                const amount = document.getElementById('expense-amount').value;
+                const category = document.getElementById('expense-category').value;
+                const type = document.getElementById('expense-type').value;
+                const method = document.getElementById('expense-method').value;
+                const date = document.getElementById('expense-date').value;
+                
+                const response = await apiCall('/api/accounting/expenses', {
+                    method: 'POST',
+                    body: {
+                        description,
+                        amount: parseFloat(amount),
+                        category,
+                        type,
+                        paymentMethod: method,
+                        date
+                    }
+                });
+                
+                if (response.ok) {
+                    alert('تم إضافة المصروف بنجاح');
+                    $('#addExpenseModal').modal('hide');
+                    loadExpenses();
+                    loadDashboardData();
+                } else {
+                    const errorData = await response.json();
+                    alert(errorData.error || 'فشل إضافة المصروف');
+                }
+            } catch (error) {
+                console.error('Error adding expense:', error);
+                alert('فشل إضافة المصروف');
+            }
+        }
+        
+        async function addTeacherPayment() {
+            try {
+                const teacherId = document.getElementById('teacher-payment-teacher').value;
+                const studentId = document.getElementById('teacher-payment-student').value;
+                const classId = document.getElementById('teacher-payment-class').value;
+                const month = document.getElementById('teacher-payment-month').value;
+                const amount = document.getElementById('teacher-payment-amount').value;
+                const percentage = document.getElementById('teacher-payment-percentage').value;
+                const method = document.getElementById('teacher-payment-method').value;
+                const date = document.getElementById('teacher-payment-date').value;
+                
+                const response = await apiCall('/api/accounting/teacher-payments', {
+                    method: 'POST',
+                    body: {
+                        teacherId,
+                        studentId,
+                        classId,
+                        month,
+                        amount: parseFloat(amount),
+                        percentage: parseFloat(percentage),
+                        paymentMethod: method,
+                        paymentDate: date
+                    }
+                });
+                
+                if (response.ok) {
+                    alert('تم إضافة عمولة الأستاذ بنجاح');
+                    $('#addTeacherPaymentModal').modal('hide');
+                    loadTeacherPayments();
+                    loadDashboardData();
+                } else {
+                    const errorData = await response.json();
+                    alert(errorData.error || 'فشل إضافة عمولة الأستاذ');
+                }
+            } catch (error) {
+                console.error('Error adding teacher payment:', error);
+                alert('فشل إضافة عمولة الأستاذ');
+            }
+        }
+        
+        async function addEmployee() {
+            try {
+                const username = document.getElementById('employee-username').value;
+                const password = document.getElementById('employee-password').value;
+                const fullName = document.getElementById('employee-fullname').value;
+                const role = document.getElementById('employee-role').value;
+                const email = document.getElementById('employee-email').value;
+                const phone = document.getElementById('employee-phone').value;
+                
+                const response = await apiCall('/api/employees', {
+                    method: 'POST',
+                    body: {
+                        username,
+                        password,
+                        role,
+                        fullName,
+                        email,
+                        phone
+                    }
+                });
+                
+                if (response.ok) {
+                    alert('تم إضافة الموظف بنجاح');
+                    $('#addEmployeeModal').modal('hide');
+                    loadEmployees();
+                } else {
+                    const errorData = await response.json();
+                    alert(errorData.error || 'فشل إضافة الموظف');
+                }
+            } catch (error) {
+                console.error('Error adding employee:', error);
+                alert('فشل إضافة الموظف');
+            }
+        }
+        
+        // Helper functions
+        function getStatusText(status) {
+            const statusMap = {
+                'paid': 'مدفوع',
+                'pending': 'قيد الانتظار',
+                'late': 'متأخر'
+            };
+            return statusMap[status] || status;
+        }
+        
+        function getStatusClass(status) {
+            const classMap = {
+                'paid': 'text-success',
+                'pending': 'text-warning',
+                'late': 'text-danger'
+            };
+            return classMap[status] || '';
+        }
+        
+        function getRoleText(role) {
+            const roleMap = {
+                'admin': 'مدير',
+                'accountant': 'محاسب',
+                'secretary': 'سكرتير',
+                'teacher': 'أستاذ'
+            };
+            return roleMap[role] || role;
+        }
+        
+        function getCategoryText(category) {
+            const categoryMap = {
+                'rent': 'إيجار',
+                'utilities': 'مرافق',
+                'supplies': 'لوازم',
+                'maintenance': 'صيانة',
+                'marketing': 'تسويق',
+                'salaries': 'رواتب',
+                'tuition': 'رسوم دراسية',
+                'registration': 'رسوم تسجيل',
+                'other': 'أخرى'
+            };
+            return categoryMap[category] || category;
+        }
+        
+        function getPaymentMethodText(method) {
+            const methodMap = {
+                'cash': 'نقدي',
+                'bank': 'تحويل بنكي',
+                'online': 'دفع إلكتروني'
+            };
+            return methodMap[method] || method;
+        }
+        
+        // Generate invoice function
+        async function generateInvoice(type, id) {
+            try {
+                const response = await apiCall(`/api/accounting/invoices/generate/${type}/${id}`);
+                const invoiceData = await response.json();
+                
+                // Populate invoice template
+                document.getElementById('invoice-number').textContent = invoiceData.invoiceNumber;
+                document.getElementById('invoice-date').textContent = new Date(invoiceData.date).toLocaleDateString('ar-EG');
+                document.getElementById('invoice-customer').textContent = invoiceData.recipient.name;
+                document.getElementById('invoice-type').textContent = getInvoiceTypeText(invoiceData.type);
+                
+                // Populate items
+                const itemsBody = document.getElementById('invoice-items-body');
+                itemsBody.innerHTML = '';
+                
+                invoiceData.items.forEach((item, index) => {
+                    const row = document.createElement('tr');
+                    
+                    const indexCell = document.createElement('td');
+                    indexCell.textContent = index + 1;
+                    
+                    const descCell = document.createElement('td');
+                    descCell.textContent = item.description;
+                    
+                    const amountCell = document.createElement('td');
+                    amountCell.textContent = `${item.amount.toLocaleString()} د.ج`;
+                    
+                    const quantityCell = document.createElement('td');
+                    quantityCell.textContent = item.quantity || 1;
+                    
+                    const totalCell = document.createElement('td');
+                    totalCell.textContent = `${(item.amount * (item.quantity || 1)).toLocaleString()} د.ج`;
+                    
+                    row.appendChild(indexCell);
+                    row.appendChild(descCell);
+                    row.appendChild(amountCell);
+                    row.appendChild(quantityCell);
+                    row.appendChild(totalCell);
+                    
+                    itemsBody.appendChild(row);
+                });
+                
+                // Set total amount
+                document.getElementById('invoice-total-amount').textContent = invoiceData.totalAmount.toLocaleString();
+                
+                // Show invoice
+                document.getElementById('invoice-template').style.display = 'block';
+                
+            } catch (error) {
+                console.error('Error generating invoice:', error);
+                alert('فشل توليد الفاتورة');
+            }
+        }
+        
+        function getInvoiceTypeText(type) {
+            const typeMap = {
+                'school-fee': 'رسوم تسجيل',
+                'teacher': 'دفع أستاذ',
+                'staff': 'راتب موظف',
+                'tuition': 'رسوم دراسية',
+                'other': 'أخرى'
+            };
+            return typeMap[type] || type;
+        }
+
+    </script>
+</body>
+</html>
