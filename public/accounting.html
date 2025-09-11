@@ -21,43 +21,19 @@
             color: #333;
         }
         
-        .sidebar {
+        .header {
             background-color: var(--primary-color);
             color: white;
-            height: 100vh;
-            position: fixed;
-            padding-top: 20px;
-            overflow-y: auto;
-        }
-        
-        .sidebar .nav-link {
-            color: rgba(255, 255, 255, 0.8);
-            padding: 12px 20px;
-            margin: 4px 0;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        
-        .sidebar .nav-link:hover {
-            background-color: rgba(255, 255, 255, 0.2);
-            transform: translateX(-5px);
-        }
-        
-        .sidebar .nav-link.active {
-            background-color: rgba(255, 255, 255, 0.15);
-            border-right: 4px solid var(--accent-color);
-        }
-        
-        .sidebar .nav-link i {
-            margin-left: 10px;
+            padding: 15px 0;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
         
         .main-content {
-            margin-right: 250px;
             padding: 20px;
             position: relative;
-            min-height: 100vh;
         }
         
         .dashboard-card {
@@ -110,28 +86,11 @@
             background-color: white;
         }
         
-        .section {
-    display: block;
-    opacity: 1;
-    position: relative;
-    width: 100%;
-    margin-bottom: 30px;
-}
-        
-.section.active {
-    display: block;
-    opacity: 1;
-    position: relative;
-}
-.section-separator {
-    border-bottom: 2px solid var(--light-color);
-    margin: 40px 0;
-    padding-bottom: 20px;
-}
         .page-header {
             border-bottom: 2px solid var(--light-color);
             padding-bottom: 15px;
             margin-bottom: 25px;
+            margin-top: 20px;
         }
         
         .loading {
@@ -185,6 +144,34 @@
             color: #777;
         }
         
+        .section-title {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            margin-top: 30px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .section-title h3 {
+            margin: 0;
+        }
+        
+        .section-content {
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+            background-color: white;
+        }
+        
+        .collapsed .bi-chevron-down {
+            transform: rotate(180deg);
+        }
+        
         @media print {
             body * {
                 visibility: hidden;
@@ -206,7 +193,7 @@
 </head>
 <body>
     <!-- Login Section -->
-    <div id="login-section" class="section active">
+    <div id="login-section">
         <div class="login-container">
             <h2 class="text-center mb-4">تسجيل الدخول - قسم المحاسبة</h2>
             <form id="login-form">
@@ -228,117 +215,489 @@
     </div>
 
     <!-- Main Application -->
-    <div id="app-section" class="section">
-        <div class="sidebar">
-            <div class="text-center mb-4">
-                <h4>نظام المحاسبة</h4>
-                <p id="accounting-name" class="text-muted">مرحباً</p>
+    <div id="app-section" style="display: none;">
+        <!-- Header -->
+        <div class="header">
+            <div class="container">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h3>نظام المحاسبة - إدارة المدرسة</h3>
+                    <div>
+                        <span id="accounting-name" class="me-3">مرحباً</span>
+                        <button class="btn btn-outline-light btn-sm" id="logout-btn">
+                            <i class="bi bi-box-arrow-left"></i> تسجيل الخروج
+                        </button>
+                    </div>
+                </div>
             </div>
-            
-            <ul class="nav flex-column">
-                <li class="nav-item">
-                    <a class="nav-link active" data-section="dashboard">
-                        <i class="bi bi-speedometer2"></i> لوحة التحكم
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" data-section="payments">
-                        <i class="bi bi-cash-coin"></i> مدفوعات الطلاب
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" data-section="expenses">
-                        <i class="bi bi-wallet2"></i> المصروفات
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" data-section="teacher-payments">
-                        <i class="bi bi-people"></i> مدفوعات الأساتذة
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" data-section="reports">
-                        <i class="bi bi-graph-up"></i> التقارير
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" data-section="employees">
-                        <i class="bi bi-person-badge"></i> إدارة الموظفين
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="#" id="logout-btn" class="nav-link">
-                        <i class="bi bi-box-arrow-left"></i> تسجيل الخروج
-                    </a>
-                </li>
-            </ul>
         </div>
 
-        <div class="main-content">
-            <!-- Remove the sidebar -->
-            <div class="container-fluid">
-                <!-- Dashboard Section -->
-                <div id="dashboard" class="section">
-                    <div class="page-header">
-                        <h3>لوحة تحكم المحاسبة</h3>
-                        <p class="text-muted">نظرة عامة على الوضع المالي</p>
+        <div class="container main-content">
+            <!-- Dashboard Section -->
+            <div class="section-title" data-section="dashboard">
+                <h3>لوحة تحكم المحاسبة</h3>
+                <i class="bi bi-chevron-down"></i>
+            </div>
+            <div id="dashboard" class="section-content">
+                <p class="text-muted">نظرة عامة على الوضع المالي</p>
+                
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="card dashboard-card card-income">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h5 class="card-title">الإيرادات</h5>
+                                        <p class="stat-number text-success" id="total-income">0 د.ج</p>
+                                    </div>
+                                    <div class="icon-container">
+                                        <i class="bi bi-currency-exchange fs-1 text-success"></i>
+                                    </div>
+                                </div>
+                                <p class="card-text">إجمالي الإيرادات لهذا الشهر</p>
+                            </div>
+                        </div>
                     </div>
-                    <!-- ... existing dashboard content ... -->
+                    <div class="col-md-4">
+                        <div class="card dashboard-card card-expenses">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h5 class="card-title">المصروفات</h5>
+                                        <p class="stat-number text-danger" id="total-expenses">0 د.ج</p>
+                                    </div>
+                                    <div class="icon-container">
+                                        <i class="bi bi-cash-stack fs-1 text-danger"></i>
+                                    </div>
+                                </div>
+                                <p class="card-text">إجمالي المصروفات لهذا الشهر</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card dashboard-card card-balance">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h5 class="card-title">الرصيد</h5>
+                                        <p class="stat-number text-primary" id="current-balance">0 د.ج</p>
+                                    </div>
+                                    <div class="icon-container">
+                                        <i class="bi bi-wallet fs-1 text-primary"></i>
+                                    </div>
+                                </div>
+                                <p class="card-text">الرصيد الحالي</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
-                <div class="section-separator"></div>
-                
-                <!-- Payments Section -->
-                <div id="payments" class="section">
-                    <div class="page-header">
-                        <h3>مدفوعات الطلاب</h3>
-                        <p class="text-muted">إدارة مدفوعات الرسوم الدراسية للطلاب</p>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5>أحدث المعاملات</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>التاريخ</th>
+                                                <th>الوصف</th>
+                                                <th>المبلغ</th>
+                                                <th>النوع</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="recent-transactions">
+                                            <tr><td colspan="4" class="text-center">جاري التحميل...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <!-- ... existing payments content ... -->
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5>المصروفات حسب الفئة</h5>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="expensesChart" height="250"></canvas>
+                            </div>
+                        </div>
+                    </div>
                 </div>
+            </div>
+            
+            <!-- Payments Section -->
+            <div class="section-title" data-section="payments">
+                <h3>مدفوعات الطلاب</h3>
+                <i class="bi bi-chevron-down"></i>
+            </div>
+            <div id="payments" class="section-content">
+                <p class="text-muted">إدارة مدفوعات الرسوم الدراسية للطلاب</p>
                 
-                <div class="section-separator"></div>
-                
-                <!-- Expenses Section -->
-                <div id="expenses" class="section">
-                    <div class="page-header">
-                        <h3>إدارة المصروفات</h3>
-                        <p class="text-muted">تسجيل وتتبع المصروفات التشغيلية</p>
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5>قائمة المدفوعات</h5>
+                            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addPaymentModal">
+                                <i class="bi bi-plus-circle"></i> تسديد دفعة
+                            </button>
+                        </div>
                     </div>
-                    <!-- ... existing expenses content ... -->
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <input type="text" class="form-control" placeholder="بحث بالاسم أو المعرف..." id="payment-search">
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" id="payment-status-filter">
+                                    <option value="">جميع الحالات</option>
+                                    <option value="paid">مدفوع</option>
+                                    <option value="pending">قيد الانتظار</option>
+                                    <option value="late">متأخر</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" id="payment-month-filter">
+                                    <option value="">جميع الأشهر</option>
+                                    <!-- Months will be populated by JavaScript -->
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button class="btn btn-outline-secondary w-100" id="payment-filter-btn">
+                                    <i class="bi bi-funnel"></i> تصفية
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>الطالب</th>
+                                        <th>الحصة</th>
+                                        <th>الشهر</th>
+                                        <th>المبلغ</th>
+                                        <th>الحالة</th>
+                                        <th>تاريخ الدفع</th>
+                                        <th>الإجراءات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="payments-table-body">
+                                    <tr><td colspan="7" class="text-center">جاري التحميل...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <nav aria-label="Page navigation">
+                            <ul class="pagination justify-content-center" id="payments-pagination">
+                                <!-- Pagination will be populated by JavaScript -->
+                            </ul>
+                        </nav>
+                    </div>
                 </div>
+            </div>
+            
+            <!-- Expenses Section -->
+            <div class="section-title" data-section="expenses">
+                <h3>إدارة المصروفات</h3>
+                <i class="bi bi-chevron-down"></i>
+            </div>
+            <div id="expenses" class="section-content">
+                <p class="text-muted">تسجيل وتتبع المصروفات التشغيلية</p>
                 
-                <div class="section-separator"></div>
-                
-                <!-- Teacher Payments Section -->
-                <div id="teacher-payments" class="section">
-                    <div class="page-header">
-                        <h3>مدفوعات الأساتذة</h3>
-                        <p class="text-muted">إدارة عمولات ومدفوعات الأساتذة</p>
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5>سجل المصروفات</h5>
+                            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addExpenseModal">
+                                <i class="bi bi-plus-circle"></i> إضافة مصروف
+                            </button>
+                        </div>
                     </div>
-                    <!-- ... existing teacher payments content ... -->
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-3">
+                                <input type="text" class="form-control" placeholder="بحث بالوصف..." id="expense-search">
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" id="expense-category-filter">
+                                    <option value="">جميع الفئات</option>
+                                    <option value="rent">إيجار</option>
+                                    <option value="utilities">مرافق</option>
+                                    <option value="supplies">لوازم</option>
+                                    <option value="maintenance">صيانة</option>
+                                    <option value="marketing">تسويق</option>
+                                    <option value="salaries">رواتب</option>
+                                    <option value="other">أخرى</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <input type="date" class="form-control" id="expense-date-filter">
+                            </div>
+                            <div class="col-md-3">
+                                <button class="btn btn-outline-secondary w-100" id="expense-filter-btn">
+                                    <i class="bi bi-funnel"></i> تصفية
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>التاريخ</th>
+                                        <th>الوصف</th>
+                                        <th>الفئة</th>
+                                        <th>المبلغ</th>
+                                        <th>طريقة الدفع</th>
+                                        <th>مسجل بواسطة</th>
+                                        <th>الإجراءات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="expenses-table-body">
+                                    <tr><td colspan="7" class="text-center">جاري التحميل...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <nav aria-label="Page navigation">
+                            <ul class="pagination justify-content-center" id="expenses-pagination">
+                                <!-- Pagination will be populated by JavaScript -->
+                            </ul>
+                        </nav>
+                    </div>
                 </div>
+            </div>
+            
+            <!-- Teacher Payments Section -->
+            <div class="section-title" data-section="teacher-payments">
+                <h3>مدفوعات الأساتذة</h3>
+                <i class="bi bi-chevron-down"></i>
+            </div>
+            <div id="teacher-payments" class="section-content">
+                <p class="text-muted">إدارة عمولات ومدفوعات الأساتذة</p>
                 
-                <div class="section-separator"></div>
-                
-                <!-- Reports Section -->
-                <div id="reports" class="section">
-                    <div class="page-header">
-                        <h3>التقارير المالية</h3>
-                        <p class="text-muted">تقارير وتحليلات مالية مفصلة</p>
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5>عمولات الأساتذة</h5>
+                            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addTeacherPaymentModal">
+                                <i class="bi bi-plus-circle"></i> تسديد عمولة
+                            </button>
+                        </div>
                     </div>
-                    <!-- ... existing reports content ... -->
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <input type="text" class="form-control" placeholder="بحث باسم الأستاذ..." id="teacher-payment-search">
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" id="teacher-payment-status-filter">
+                                    <option value="">جميع الحالات</option>
+                                    <option value="paid">مدفوع</option>
+                                    <option value="pending">قيد الانتظار</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <input type="month" class="form-control" id="teacher-payment-month-filter">
+                            </div>
+                            <div class="col-md-2">
+                                <button class="btn btn-outline-secondary w-100" id="teacher-payment-filter-btn">
+                                    <i class="bi bi-funnel"></i> تصفية
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>الأستاذ</th>
+                                        <th>الطالب</th>
+                                        <th>الحصة</th>
+                                        <th>الشهر</th>
+                                        <th>المبلغ</th>
+                                        <th>النسبة</th>
+                                        <th>الحالة</th>
+                                        <th>تاريخ الدفع</th>
+                                        <th>الإجراءات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="teacher-payments-table-body">
+                                    <tr><td colspan="9" class="text-center">جاري التحميل...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <nav aria-label="Page navigation">
+                            <ul class="pagination justify-content-center" id="teacher-payments-pagination">
+                                <!-- Pagination will be populated by JavaScript -->
+                            </ul>
+                        </nav>
+                    </div>
                 </div>
+            </div>
+            
+            <!-- Reports Section -->
+            <div class="section-title" data-section="reports">
+                <h3>التقارير المالية</h3>
+                <i class="bi bi-chevron-down"></i>
+            </div>
+            <div id="reports" class="section-content">
+                <p class="text-muted">تقارير وتحليلات مالية مفصلة</p>
                 
-                <div class="section-separator"></div>
-                
-                <!-- Employees Section -->
-                <div id="employees" class="section">
-                    <div class="page-header">
-                        <h3>إدارة الموظفين</h3>
-                        <p class="text-muted">إضافة وإدارة موظفي المحاسبة</p>
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5>تقرير الإيرادات والمصروفات</h5>
                     </div>
-                    <!-- ... existing employees content ... -->
+                    <div class="card-body">
+                        <div class="row mb-4">
+                            <div class="col-md-4">
+                                <label for="report-year" class="form-label">السنة</label>
+                                <select class="form-select" id="report-year">
+                                    <!-- Years will be populated by JavaScript -->
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="report-month" class="form-label">الشهر (اختياري)</label>
+                                <select class="form-select" id="report-month">
+                                    <option value="">كل الأشهر</option>
+                                    <option value="01">يناير</option>
+                                    <option value="02">فبراير</option>
+                                    <option value="03">مارس</option>
+                                    <option value="04">أبريل</option>
+                                    <option value="05">مايو</option>
+                                    <option value="06">يونيو</option>
+                                    <option value="07">يوليو</option>
+                                    <option value="08">أغسطس</option>
+                                    <option value="09">سبتمبر</option>
+                                    <option value="10">أكتوبر</option>
+                                    <option value="11">نوفمبر</option>
+                                    <option value="12">ديسمبر</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 d-flex align-items-end">
+                                <button class="btn btn-primary w-100" id="generate-report-btn">
+                                    <i class="bi bi-file-earmark-bar-graph"></i> إنشاء التقرير
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card mb-4">
+                                    <div class="card-header">
+                                        <h6>الإيرادات والمصروفات الشهرية</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="monthlyReportChart" height="250"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card mb-4">
+                                    <div class="card-header">
+                                        <h6>توزيع المصروفات</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="expenseDistributionChart" height="250"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card">
+                            <div class="card-header">
+                                <h6>التفاصيل</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>التاريخ</th>
+                                                <th>النوع</th>
+                                                <th>الوصف</th>
+                                                <th>الفئة</th>
+                                                <th>المبلغ</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="report-details-table">
+                                            <tr><td colspan="5" class="text-center">استخدم أزرار التصفية لإنشاء تقرير</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Employees Section -->
+            <div class="section-title" data-section="employees">
+                <h3>إدارة الموظفين</h3>
+                <i class="bi bi-chevron-down"></i>
+            </div>
+            <div id="employees" class="section-content">
+                <p class="text-muted">إضافة وإدارة موظفي المحاسبة</p>
+                
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5>قائمة الموظفين</h5>
+                            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addEmployeeModal">
+                                <i class="bi bi-plus-circle"></i> إضافة موظف
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <input type="text" class="form-control" placeholder="بحث بالاسم أو اسم المستخدم..." id="employee-search">
+                            </div>
+                            <div class="col-md-4">
+                                <select class="form-select" id="employee-role-filter">
+                                    <option value="">جميع الأدوار</option>
+                                    <option value="accountant">محاسب</option>
+                                    <option value="admin">مدير</option>
+                                    <option value="secretary">سكرتير</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button class="btn btn-outline-secondary w-100" id="employee-filter-btn">
+                                    <i class="bi bi-funnel"></i> تصفية
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>اسم المستخدم</th>
+                                        <th>الاسم الكامل</th>
+                                        <th>الدور</th>
+                                        <th>البريد الإلكتروني</th>
+                                        <th>الهاتف</th>
+                                        <th>الحالة</th>
+                                        <th>الإجراءات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="employees-table-body">
+                                    <tr><td colspan="7" class="text-center">جاري التحميل...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <nav aria-label="Page navigation">
+                            <ul class="pagination justify-content-center" id="employees-pagination">
+                                <!-- Pagination will be populated by JavaScript -->
+                            </ul>
+                        </nav>
+                    </div>
                 </div>
             </div>
         </div>
@@ -654,6 +1013,9 @@
             
             // Initialize years for reports
             initReportYears();
+            
+            // Initialize collapsible sections
+            initCollapsibleSections();
         });
 
         function initEventListeners() {
@@ -662,15 +1024,6 @@
             
             // Logout button
             document.getElementById('logout-btn').addEventListener('click', handleLogout);
-            
-            // Navigation
-            document.querySelectorAll('.nav-link[data-section]').forEach(link => {
-                link.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    const sectionId = this.getAttribute('data-section');
-                    showSection(sectionId);
-                });
-            });
             
             // Filter buttons
             const paymentFilterBtn = document.getElementById('payment-filter-btn');
@@ -733,6 +1086,26 @@
                     loadTeachersAndStudents();
                 });
             }
+        }
+        
+        function initCollapsibleSections() {
+            // Add click event to all section titles
+            document.querySelectorAll('.section-title').forEach(title => {
+                title.addEventListener('click', function() {
+                    const sectionId = this.getAttribute('data-section');
+                    const content = document.getElementById(sectionId);
+                    
+                    // Toggle collapse class
+                    this.classList.toggle('collapsed');
+                    
+                    // Toggle content visibility
+                    if (content.style.display === 'none') {
+                        content.style.display = 'block';
+                    } else {
+                        content.style.display = 'none';
+                    }
+                });
+            });
         }
         
         function initMonthFilters() {
@@ -838,19 +1211,13 @@
         }
         
         function showLogin() {
-            const loginSection = document.getElementById('login-section');
-            const appSection = document.getElementById('app-section');
-            
-            if (loginSection) loginSection.classList.add('active');
-            if (appSection) appSection.classList.remove('active');
+            document.getElementById('login-section').style.display = 'block';
+            document.getElementById('app-section').style.display = 'none';
         }
         
         function showApp() {
-            const loginSection = document.getElementById('login-section');
-            const appSection = document.getElementById('app-section');
-            
-            if (loginSection) loginSection.classList.remove('active');
-            if (appSection) appSection.classList.add('active');
+            document.getElementById('login-section').style.display = 'none';
+            document.getElementById('app-section').style.display = 'block';
             
             // Update user name
             const accountingName = document.getElementById('accounting-name');
@@ -860,48 +1227,6 @@
             
             // Load initial data
             loadDashboardData();
-        }
-        
-        function showSection(sectionId) {
-            // Hide all sections first
-            document.querySelectorAll('.section').forEach(section => {
-                section.classList.remove('active');
-            });
-            
-            // Show the requested section
-            const targetSection = document.getElementById(sectionId);
-            if (targetSection) {
-                targetSection.classList.add('active');
-            }
-            
-            // Update navbar
-            document.querySelectorAll('.nav-link').forEach(link => {
-                link.classList.remove('active');
-            });
-            
-            const activeNavLink = document.querySelector(`.nav-link[data-section="${sectionId}"]`);
-            if (activeNavLink) {
-                activeNavLink.classList.add('active');
-            }
-            
-            // Load data based on section
-            switch(sectionId) {
-                case 'dashboard':
-                    loadDashboardData();
-                    break;
-                case 'payments':
-                    loadPayments();
-                    break;
-                case 'expenses':
-                    loadExpenses();
-                    break;
-                case 'teacher-payments':
-                    loadTeacherPayments();
-                    break;
-                case 'employees':
-                    loadEmployees();
-                    break;
-            }
         }
         
         async function apiCall(url, options = {}) {
@@ -2091,7 +2416,6 @@
             };
             return typeMap[type] || type;
         }
-
     </script>
 </body>
 </html>

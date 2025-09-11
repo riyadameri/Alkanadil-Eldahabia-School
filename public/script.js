@@ -11123,3 +11123,7 @@ function getNotificationIcon(type) {
 
 // بدء التطبيق عند تحميل الصفحة
 document.addEventListener('DOMContentLoaded', initApp);
+
+
+
+
