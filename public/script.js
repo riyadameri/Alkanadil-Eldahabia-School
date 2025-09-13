@@ -10840,6 +10840,7 @@ async function addExpense() {
     }
 }
 
+
 // View transaction details
 async function viewTransactionDetails(transactionId) {
     try {
@@ -11117,6 +11118,7 @@ function getNotificationIcon(type) {
     };
     return icons[type] || 'bi-bell';
 }
+
 
 // إضافة الدالة للتهيئة العامة للتطبيق
 
