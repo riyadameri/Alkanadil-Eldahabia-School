@@ -215,11 +215,7 @@ require('dotenv').config();
     type: { type: String, enum: ['income', 'expense'], required: true },
     amount: { type: Number, required: true },
     description: String,
-    category: { 
-      type: String, 
-      enum: ['tuition', 'salary', 'rent', 'utilities', 'supplies', 'other', 'registration'], // أضف 'registration' هنا
-      required: true 
-    },
+    category: { type: String, enum: ['tuition', 'salary', 'rent', 'utilities', 'supplies', 'other'] },
     date: { type: Date, default: Date.now },
     recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     reference: String
@@ -261,16 +257,16 @@ require('dotenv').config();
 
   // Teacher Payment Schema (monthly payments)
   const teacherPaymentSchema = new mongoose.Schema({
-    teacher: { type: mongoose.Schema.Types.ObjectId, ref: 'Teacher', required: true },
-    class: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: true },
-    student: { type: mongoose.Schema.Types.ObjectId, ref: 'Student', required: true },
-    month: { type: String, required: true }, // Format: YYYY-MM
-    amount: { type: Number, required: true }, // 70% of class price
-    status: { type: String, enum: ['paid', 'pending', 'late'], default: 'pending' },
-    paymentDate: { type: Date, default: null },
-    paymentMethod: { type: String, enum: ['cash', 'bank', 'online'], default: 'cash' },
-    invoiceNumber: String,
-    recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+  teacher: { type: mongoose.Schema.Types.ObjectId, ref: 'Teacher', required: true },
+  class: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: true },
+  student: { type: mongoose.Schema.Types.ObjectId, ref: 'Student', required: true },
+  month: { type: String, required: true }, // Format: YYYY-MM
+  amount: { type: Number, required: true }, // 70% of class price
+  status: { type: String, enum: ['paid', 'pending', 'late'], default: 'pending' },
+  paymentDate: { type: Date, default: null },
+  paymentMethod: { type: String, enum: ['cash', 'bank', 'online'], default: 'cash' },
+  invoiceNumber: String,
+  recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
   });
 
   // Staff Salary Schema
@@ -288,22 +284,12 @@ require('dotenv').config();
   // Expense Schema
   // Budget Schema
   const budgetSchema = new mongoose.Schema({
-    title: { type: String, required: true },
+    type: { type: String, enum: ['initial', 'additional', 'adjustment'], required: true },
     amount: { type: Number, required: true },
-    category: { 
-      type: String, 
-      enum: ['operational', 'salaries', 'development', 'marketing', 'other'],
-      required: true 
-    },
     description: String,
-    startDate: { type: Date, required: true },
-    endDate: { type: Date, required: true },
-    status: { type: String, enum: ['active', 'completed', 'cancelled'], default: 'active' },
-    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    actualSpending: { type: Number, default: 0 },
-    remainingBudget: { type: Number, default: function() { return this.amount; } }
-  }, { timestamps: true });
-
+    date: { type: Date, default: Date.now },
+    recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+  });
 
   // Expense Schema (محدث)
   const expenseSchema = new mongoose.Schema({
@@ -379,6 +365,19 @@ require('dotenv').config();
   const Expense = mongoose.model('Expense', expenseSchema);
   const Invoice = mongoose.model('Invoice', invoiceSchema);
   const AuthorizedCard = mongoose.model('AuthorizedCard', authorizedCardSchema);
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -700,73 +699,36 @@ require('dotenv').config();
   // JWT Authentication Middleware
   // Update authenticate middleware to check for accounting access
   // Update your authenticate middleware to handle single role or array
-  // const authenticate = (roles = []) => {
-  //   return (req, res, next) => {
-  //     try {
-  //       const token = req.headers.authorization?.split(' ')[1];
-        
-  //       if (!token) {
-  //         // For count endpoints, you might want to allow public access
-  //         if (req.path.includes('/count')) {
-  //           return next();
-  //         }
-  //         return res.status(401).json({ error: 'غير مصرح بالدخول' });
-  //       }
-  
-  //       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-  //       req.user = decoded;
-  
-  //       if (roles.length && !roles.includes(decoded.role)) {
-  //         return res.status(403).json({ error: 'غير مصرح بالوصول لهذه الصلاحية' });
-  //       }
-  
-  //       next();
-  //     } catch (err) {
-  //       // For count endpoints, allow continuation even if token is invalid
-  //       if (req.path.includes('/count')) {
-  //         return next();
-  //       }
-  //       res.status(401).json({ error: 'رمز الدخول غير صالح' });
-  //     }
-  //   };
-  // };
-
-
   const authenticate = (roles = []) => {
     return (req, res, next) => {
-        try {
-            const token = req.headers.authorization?.split(' ')[1];
-            
-            if (!token) {
-                return res.status(401).json({ error: 'غير مصرح بالدخول' });
-            }
-            
-            const decoded = jwt.verify(token, process.env.JWT_SECRET);
-            req.user = decoded;
-            
-            if (roles.length && !roles.includes(decoded.role)) {
-                return res.status(403).json({ error: 'غير مصرح بالوصول لهذه الصلاحية' });
-            }
-            
-            next();
-        } catch (err) {
-            res.status(401).json({ error: 'رمز الدخول غير صالح' });
+      try {
+        const token = req.headers.authorization?.split(' ')[1];
+        
+        if (!token) {
+          // For count endpoints, you might want to allow public access
+          if (req.path.includes('/count')) {
+            return next();
+          }
+          return res.status(401).json({ error: 'غير مصرح بالدخول' });
         }
-    };
-};
-const optionalAuth = (req, res, next) => {
-  try {
-      const token = req.headers.authorization?.split(' ')[1];
-      if (token) {
-          const decoded = jwt.verify(token, process.env.JWT_SECRET);
-          req.user = decoded;
+  
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = decoded;
+  
+        if (roles.length && !roles.includes(decoded.role)) {
+          return res.status(403).json({ error: 'غير مصرح بالوصول لهذه الصلاحية' });
+        }
+  
+        next();
+      } catch (err) {
+        // For count endpoints, allow continuation even if token is invalid
+        if (req.path.includes('/count')) {
+          return next();
+        }
+        res.status(401).json({ error: 'رمز الدخول غير صالح' });
       }
-      next();
-  } catch (err) {
-      next(); // استمر حتى لو فشلت المصادقة
-  }
-};
-
+    };
+  };
   
   // Email Configuration
   const transporter = nodemailer.createTransport({
@@ -915,30 +877,24 @@ const validateObjectId = (req, res, next) => {
     }
   });
 
+
   app.post('/api/students', authenticate(['admin', 'secretary']), async (req, res) => {
     try {
       const student = new Student(req.body);
       await student.save();
       
-      // إنشاء رسوم التسجيل فقط إذا كان الطالب نشطاً
-      if (req.body.active !== false) {
-        const schoolFee = new SchoolFee({
-          student: student._id,
-          amount: req.body.registrationFee || 600, // 600 DZD قيمة افتراضية
-          status: 'pending'
-        });
-        await schoolFee.save();
-        
-        // تسجيل المعاملة المالية (إيراد متوقع) - الإصلاح هنا
-        const transaction = new FinancialTransaction({
+      // Only create registration fee if amount is specified
+      if (req.body.registrationFee && req.body.registrationFee > 0) {
+        const registrationFee = new FinancialTransaction({
           type: 'income',
-          amount: schoolFee.amount,
-          description: `رسوم تسجيل الطالب ${student.name}`,
+          amount: req.body.registrationFee,
+          description: 'رسوم تسجيل الطالب',
           category: 'registration',
           recordedBy: req.user.id,
-          reference: schoolFee._id
+          reference: student._id
         });
-        await transaction.save();
+        
+        await registrationFee.save();
       }
       
       res.status(201).json(student);
@@ -947,559 +903,6 @@ const validateObjectId = (req, res, next) => {
     }
   });
 
-  app.get('/api/accounting/budgets', authenticate(['admin', 'accountant']), async (req, res) => {
-    try {
-      const { status, category } = req.query;
-      const query = {};
-      
-      if (status) query.status = status;
-      if (category) query.category = category;
-      
-      const budgets = await Budget.find(query)
-        .populate('createdBy')
-        .sort({ createdAt: -1 });
-      
-      res.json(budgets);
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-  
-  app.post('/api/accounting/budgets', authenticate(['admin', 'accountant']), async (req, res) => {
-    try {
-      const { title, amount, category, description, startDate, endDate } = req.body;
-      
-      const budget = new Budget({
-        title,
-        amount,
-        category,
-        description,
-        startDate,
-        endDate,
-        createdBy: req.user.id,
-        remainingBudget: amount
-      });
-      
-      await budget.save();
-      await budget.populate('createdBy');
-      
-      res.status(201).json(budget);
-    } catch (err) {
-      res.status(400).json({ error: err.message });
-    }
-  });
-  
-  app.put('/api/accounting/budgets/:id', authenticate(['admin', 'accountant']), async (req, res) => {
-    try {
-      const budget = await Budget.findByIdAndUpdate(
-        req.params.id,
-        req.body,
-        { new: true }
-      ).populate('createdBy');
-      
-      if (!budget) {
-        return res.status(404).json({ error: 'الميزانية غير موجودة' });
-      }
-      
-      res.json(budget);
-    } catch (err) {
-      res.status(400).json({ error: err.message });
-    }
-  });
-  
-  // تقرير المصروفات مقابل الميزانية
-  app.get('/api/accounting/budget-report', authenticate(['admin', 'accountant']), async (req, res) => {
-    try {
-      const { startDate, endDate } = req.query;
-      
-      // الحصول على جميع الميزانيات النشطة
-      const budgets = await Budget.find({ 
-        status: 'active',
-        startDate: { $lte: endDate ? new Date(endDate) : new Date() },
-        endDate: { $gte: startDate ? new Date(startDate) : new Date() }
-      });
-      
-      // الحصول على المصروفات في نفس الفترة
-      const expenseQuery = { 
-        status: 'paid',
-        date: {}
-      };
-      
-      if (startDate) expenseQuery.date.$gte = new Date(startDate);
-      if (endDate) expenseQuery.date.$lte = new Date(endDate);
-      
-      const expenses = await Expense.find(expenseQuery);
-      
-      // تجميع المصروفات حسب الفئة
-      const expensesByCategory = {};
-      expenses.forEach(expense => {
-        if (!expensesByCategory[expense.category]) {
-          expensesByCategory[expense.category] = 0;
-        }
-        expensesByCategory[expense.category] += expense.amount;
-      });
-      
-      // مقارنة مع الميزانية
-      const report = budgets.map(budget => {
-        const actualSpending = expensesByCategory[budget.category] || 0;
-        const remaining = budget.amount - actualSpending;
-        const utilizationRate = (actualSpending / budget.amount) * 100;
-        
-        return {
-          budget: budget.toObject(),
-          actualSpending,
-          remaining,
-          utilizationRate,
-          status: utilizationRate > 90 ? 'over' : utilizationRate > 75 ? 'warning' : 'good'
-        };
-      });
-      
-      res.json(report);
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-  app.get('/api/accounting/all-transactions', authenticate(['admin', 'accountant']), async (req, res) => {
-    try {
-      const { type, category, startDate, endDate, status } = req.query;
-      const query = {};
-  
-      if (type) query.type = type;
-      if (category) query.category = category;
-      if (status) query.status = status;
-      if (startDate || endDate) {
-        query.date = {};
-        if (startDate) query.date.$gte = new Date(startDate);
-        if (endDate) query.date.$lte = new Date(endDate);
-      }
-  
-      // الحصول على جميع المعاملات المالية
-      const transactions = await FinancialTransaction.find(query)
-        .populate('recordedBy')
-        .sort({ date: -1 });
-      
-      // الحصول على رسوم التسجيل
-      const schoolFeeQuery = {};
-      if (status) schoolFeeQuery.status = status;
-      if (startDate || endDate) {
-        schoolFeeQuery.paymentDate = {};
-        if (startDate) schoolFeeQuery.paymentDate.$gte = new Date(startDate);
-        if (endDate) schoolFeeQuery.paymentDate.$lte = new Date(endDate);
-      }
-      
-      const schoolFees = await SchoolFee.find(schoolFeeQuery)
-        .populate('student')
-        .populate('recordedBy')
-        .sort({ paymentDate: -1 });
-      
-      // دمج النتائج مع إضافة حقل للنوع
-      const allTransactions = [
-        ...transactions.map(t => ({
-          _id: t._id,
-          type: t.type,
-          amount: t.amount,
-          description: t.description,
-          category: t.category,
-          date: t.date,
-          recordedBy: t.recordedBy,
-          transactionType: 'financial'
-        })),
-        ...schoolFees.map(f => ({
-          _id: f._id,
-          type: 'income',
-          amount: f.amount,
-          description: `رسوم تسجيل الطالب ${f.student?.name || 'غير معروف'}`,
-          category: 'registration',
-          date: f.paymentDate || f.createdAt,
-          recordedBy: f.recordedBy,
-          status: f.status,
-          transactionType: 'schoolFee'  // تمييز نوع المعاملة
-        }))
-      ].sort((a, b) => new Date(b.date) - new Date(a.date));
-      
-      res.json(allTransactions);
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-  // نقطة نهاية جديدة للحصول على تفاصيل الأستاذ مع حصصه ومدفوعاته
-app.get('/api/teachers/:id/details', authenticate(['admin', 'accountant', 'teacher']), async (req, res) => {
-  try {
-    const teacherId = req.params.id;
-    
-    // الحصول على بيانات الأستاذ
-    const teacher = await Teacher.findById(teacherId);
-    if (!teacher) {
-      return res.status(404).json({ error: 'الأستاذ غير موجود' });
-    }
-    
-    // الحصول على جميع حصص الأستاذ
-    const classes = await Class.find({ teacher: teacherId })
-      .populate('students')
-      .populate('schedule.classroom');
-    
-    // الحصول على عمولات الأستاذ
-    const commissions = await TeacherCommission.find({ teacher: teacherId })
-      .populate('student')
-      .populate('class')
-      .sort({ month: -1 });
-    
-    // الحصول على المدفوعات التي تمت للأستاذ
-    const payments = await TeacherPayment.find({ teacher: teacherId })
-      .populate('student')
-      .populate('class')
-      .sort({ paymentDate: -1 });
-    
-    res.json({
-      teacher,
-      classes,
-      commissions,
-      payments
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-    app.get('/api/teachers/salaries-summary', authenticate(['admin', 'accountant']), async (req, res) => {
-    try {
-      const { month } = req.query;
-      const query = {};
-      if (month) query.month = month;
-      
-      const teachers = await Teacher.find({ active: true });
-      
-      let totalPending = 0;
-      let totalPaid = 0;
-      const teachersSummary = [];
-      
-      for (const teacher of teachers) {
-        // الحصول على عمولات الأستاذ
-        const commissionsQuery = { teacher: teacher._id };
-        if (month) commissionsQuery.month = month;
-        
-        const commissions = await TeacherCommission.find(commissionsQuery)
-          .populate('class');
-        
-        // حساب الإجماليات
-        const pendingAmount = commissions
-          .filter(c => c.status === 'pending')
-          .reduce((sum, c) => sum + c.amount, 0);
-        
-        const paidAmount = commissions
-          .filter(c => c.status === 'paid')
-          .reduce((sum, c) => sum + c.amount, 0);
-        
-        totalPending += pendingAmount;
-        totalPaid += paidAmount;
-        
-        // الحصول على عدد الحصص والطلاب
-        const classes = await Class.find({ teacher: teacher._id })
-          .populate('students');
-        
-        const studentsCount = classes.reduce((sum, cls) => sum + cls.students.length, 0);
-        
-        teachersSummary.push({
-          id: teacher._id,
-          name: teacher.name,
-          classesTaught: classes.length,
-          studentsCount,
-          pendingAmount,
-          paidAmount,
-          month: month || 'جميع الأشهر'
-        });
-      }
-      
-      res.json({
-        totalPending,
-        totalPaid,
-        teachersCount: teachers.length,
-        teachers: teachersSummary
-      });
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-  
-  
-  
-// endpoint جديد للحصول على مدفوعات الأستاذ
-app.get('/api/teachers/:id/payments', authenticate(['admin', 'accountant', 'teacher']), async (req, res) => {
-  try {
-    const { startDate, endDate, status } = req.query;
-    const query = { teacher: req.params.id };
-    
-    if (status) query.status = status;
-    if (startDate || endDate) {
-      query.paymentDate = {};
-      if (startDate) query.paymentDate.$gte = new Date(startDate);
-      if (endDate) query.paymentDate.$lte = new Date(endDate);
-    }
-    
-    const payments = await TeacherPayment.find(query)
-      .populate('class')
-      .populate('student')
-      .sort({ paymentDate: -1 });
-    
-    res.json(payments);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// endpoint جديد لدفع راتب الأستاذ
-app.post('/api/teachers/:id/pay-salary', authenticate(['admin', 'accountant']), async (req, res) => {
-  try {
-    const { month, paymentMethod, paymentDate } = req.body;
-    const teacherId = req.params.id;
-    
-    // الحصول على جميع عمولات الأستاذ للشهر المحدد
-    const commissionsQuery = { 
-      teacher: teacherId,
-      status: 'pending'
-    };
-    
-    if (month) commissionsQuery.month = month;
-    
-    const commissions = await TeacherCommission.find(commissionsQuery)
-      .populate('class student teacher');
-    
-    if (commissions.length === 0) {
-      return res.status(404).json({ error: 'لا توجد عمولات pending لهذا الأستاذ' });
-    }
-    
-    let totalAmount = 0;
-    const paidCommissions = [];
-    
-    // دفع كل عمولة على حدة
-    for (const commission of commissions) {
-      totalAmount += commission.amount;
-      
-      // تحديث حالة العمولة إلى مدفوعة
-      commission.status = 'paid';
-      commission.paymentDate = paymentDate || new Date();
-      commission.paymentMethod = paymentMethod || 'cash';
-      commission.recordedBy = req.user.id;
-      await commission.save();
-      
-      // تسجيل المعاملة المالية (مصروف)
-      const expense = new Expense({
-        description: `راتب الأستاذ ${commission.teacher.name} عن الطالب ${commission.student.name} لشهر ${commission.month}`,
-        amount: commission.amount,
-        category: 'salary',
-        type: 'teacher_payment',
-        recipient: {
-          type: 'teacher',
-          id: commission.teacher._id,
-          name: commission.teacher.name
-        },
-        paymentMethod: paymentMethod || 'cash',
-        status: 'paid',
-        recordedBy: req.user.id
-      });
-      await expense.save();
-      
-      paidCommissions.push({
-        commissionId: commission._id,
-        amount: commission.amount,
-        student: commission.student.name
-      });
-    }
-    
-    res.json({
-      message: `تم دفع راتب الأستاذ بنجاح بقيمة ${totalAmount} د.ج`,
-      totalAmount,
-      month: month || 'جميع الأشهر',
-      paidCommissions,
-      count: commissions.length
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-
-app.post('/api/teachers/pay-all-salaries', authenticate(['admin', 'accountant']), async (req, res) => {
-  try {
-    const { month, paymentMethod, paymentDate } = req.body;
-    
-    const teachers = await Teacher.find({ active: true });
-    let totalPaid = 0;
-    let teachersCount = 0;
-    let commissionsCount = 0;
-    
-    for (const teacher of teachers) {
-      // الحصول على عمولات الأستاذ pending
-      const commissionsQuery = { 
-        teacher: teacher._id,
-        status: 'pending'
-      };
-      
-      if (month) commissionsQuery.month = month;
-      
-      const commissions = await TeacherCommission.find(commissionsQuery)
-        .populate('class student teacher');
-      
-      if (commissions.length === 0) continue;
-      
-      let teacherTotal = 0;
-      
-      // دفع كل عمولة على حدة
-      for (const commission of commissions) {
-        teacherTotal += commission.amount;
-        
-        // تحديث حالة العمولة إلى مدفوعة
-        commission.status = 'paid';
-        commission.paymentDate = paymentDate || new Date();
-        commission.paymentMethod = paymentMethod || 'cash';
-        commission.recordedBy = req.user.id;
-        await commission.save();
-        
-        // تسجيل المعاملة المالية (مصروف)
-        const expense = new Expense({
-          description: `راتب الأستاذ ${commission.teacher.name} عن الطالب ${commission.student.name} لشهر ${commission.month}`,
-          amount: commission.amount,
-          category: 'salary',
-          type: 'teacher_payment',
-          recipient: {
-            type: 'teacher',
-            id: commission.teacher._id,
-            name: commission.teacher.name
-          },
-          paymentMethod: paymentMethod || 'cash',
-          status: 'paid',
-          recordedBy: req.user.id
-        });
-        await expense.save();
-        
-        commissionsCount++;
-      }
-      
-      totalPaid += teacherTotal;
-      teachersCount++;
-    }
-    
-    res.json({
-      message: `تم دفع رواتب ${teachersCount} أستاذ بنجاح بإجمالي ${commissionsCount} عمولة بقيمة إجمالية ${totalPaid} د.ج`,
-      totalPaid,
-      teachersCount,
-      commissionsCount
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// إضافة نقطة نهاية جديدة لدفع عمولة فردية
-app.post('/api/accounting/teacher-commissions/pay-single', authenticate(['admin', 'accountant']), async (req, res) => {
-  try {
-      const { commissionId, paymentMethod, paymentDate } = req.body;
-      
-      const commission = await TeacherCommission.findById(commissionId)
-          .populate('teacher')
-          .populate('student')
-          .populate('class');
-
-      if (!commission) {
-          return res.status(404).json({ error: 'سجل العمولة غير موجود' });
-      }
-
-      if (commission.status === 'paid') {
-          return res.status(400).json({ error: 'تم دفع العمولة مسبقاً' });
-      }
-
-      commission.status = 'paid';
-      commission.paymentDate = paymentDate || new Date();
-      commission.paymentMethod = paymentMethod || 'cash';
-      commission.receiptNumber = `COMM-${Date.now()}`;
-      commission.recordedBy = req.user.id;
-
-      await commission.save();
-      
-      // تسجيل المصروف
-      const expense = new Expense({
-          description: `عمولة الأستاذ ${commission.teacher.name} عن الطالب ${commission.student.name} لحصة ${commission.class.name} لشهر ${commission.month}`,
-          amount: commission.amount,
-          category: 'salary',
-          type: 'teacher_payment',
-          recipient: {
-              type: 'teacher',
-              id: commission.teacher._id,
-              name: commission.teacher.name
-          },
-          paymentMethod: commission.paymentMethod,
-          receiptNumber: commission.receiptNumber,
-          status: 'paid',
-          recordedBy: req.user.id
-      });
-
-      await expense.save();
-      
-      // تحديث الرصيد (خصم المبلغ)
-      await updateTotalBalance(-commission.amount);
-
-      res.json({
-          message: 'تم دفع عمولة الأستاذ بنجاح',
-          commission,
-          receiptNumber: commission.receiptNumber
-      });
-  } catch (err) {
-      res.status(500).json({ error: err.message });
-  }
-});
-
-// تحسين نقطة نهاية التقارير
-app.get('/api/accounting/reports/financial', authenticate(['admin', 'accountant']), async (req, res) => {
-  try {
-      const { year, month } = req.query;
-      const matchStage = {};
-      
-      if (year) {
-          matchStage.date = {
-              $gte: new Date(`${year}-01-01`),
-              $lte: new Date(`${year}-12-31`)
-          };
-      }
-      
-      if (month) {
-          const [year, monthNum] = month.split('-');
-          const startDate = new Date(year, monthNum - 1, 1);
-          const endDate = new Date(year, monthNum, 0);
-          matchStage.date = {
-              $gte: startDate,
-              $lte: endDate
-          };
-      }
-
-      const report = await FinancialTransaction.aggregate([
-          { $match: matchStage },
-          {
-              $group: {
-                  _id: {
-                      type: '$type',
-                      category: '$category'
-                  },
-                  totalAmount: { $sum: '$amount' },
-                  count: { $sum: 1 }
-              }
-          },
-          {
-              $project: {
-                  type: '$_id.type',
-                  category: '$_id.category',
-                  totalAmount: 1,
-                  count: 1,
-                  _id: 0
-              }
-          }
-      ]);
-
-      res.json(report);
-  } catch (err) {
-      res.status(500).json({ error: err.message });
-  }
-});
 
 
   app.get('/api/students/:id', validateObjectId, authenticate(['admin', 'secretary', 'accountant']), async (req, res) => {
@@ -2088,18 +1491,17 @@ app.put('/api/payments/:id/pay', authenticate(['admin', 'secretary', 'accountant
     
     // إذا لم يتم تسجيل عمولة للأستاذ بعد، قم بتسجيلها
     if (!payment.commissionRecorded && payment.class.teacher) {
-      // الحصول على نسبة العمولة من إعدادات الأستاذ أو استخدام القيمة الافتراضية
-      const commissionPercentage = payment.class.teacher.salaryPercentage || 0.7;
+      // الحصول على نسبة العمولة من إعدادات النظام (القيمة الافتراضية 70%)
+      const commissionPercentage = 0.7; // يمكن جعل هذا قابل للتعديل من الإعدادات
       const commissionAmount = payment.amount * commissionPercentage;
       
       const commission = new TeacherCommission({
-        teacher: payment.class.teacher._id,
+        teacher: payment.class.teacher,
         student: payment.student._id,
         class: payment.class._id,
         month: payment.month,
         amount: commissionAmount,
         percentage: commissionPercentage * 100,
-        status: 'pending', // وضع pending حتى يتم الدفع
         recordedBy: req.user.id
       });
       
@@ -2109,14 +1511,6 @@ app.put('/api/payments/:id/pay', authenticate(['admin', 'secretary', 'accountant
       payment.commissionRecorded = true;
       payment.commissionId = commission._id;
       await payment.save();
-      
-      // إشعار المحاسب بوجود عمولة جديدة需要 الدفع
-      io.emit('new-commission', { 
-        commissionId: commission._id,
-        teacher: payment.class.teacher.name,
-        amount: commissionAmount,
-        month: payment.month
-      });
     }
 
     // Get the updated payment with populated data
@@ -3246,10 +2640,6 @@ app.get('/api/payments/:id', authenticate(['admin', 'secretary', 'accountant']),
   app.get('/student/login', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'student-login.html'));
   });
-  app.get('/accounting', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'accounting.html'));
-  });
-
 
   app.get('/student/dashboard', authenticate(['student', 'secretary', 'admin','accountant']), (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'student-dashboard.html'));
@@ -3522,176 +2912,7 @@ app.get('/api/payments/:id', authenticate(['admin', 'secretary', 'accountant']),
       res.status(500).json({ error: err.message });
     }
   });
-// نقطة نهاية جديدة للحصول على العمولات مجمعة حسب الحصة
-app.get('/api/accounting/teacher-commissions-by-class', authenticate(['admin', 'accountant']), async (req, res) => {
-  try {
-      const { teacher, month, status, class: classId } = req.query;
-      const matchStage = {};
-      
-      if (teacher) matchStage.teacher = new mongoose.Types.ObjectId(teacher);
-      if (month) matchStage.month = month;
-      if (status) matchStage.status = status;
-      if (classId) matchStage.class = new mongoose.Types.ObjectId(classId);
-      
-      const commissionsByClass = await TeacherCommission.aggregate([
-          { $match: matchStage },
-          {
-              $group: {
-                  _id: {
-                      teacher: '$teacher',
-                      class: '$class',
-                      month: '$month'
-                  },
-                  commissions: { $push: '$$ROOT' },
-                  totalAmount: { $sum: '$amount' }
-              }
-          },
-          {
-              $lookup: {
-                  from: 'teachers',
-                  localField: '_id.teacher',
-                  foreignField: '_id',
-                  as: 'teacher'
-              }
-          },
-          {
-              $lookup: {
-                  from: 'classes',
-                  localField: '_id.class',
-                  foreignField: '_id',
-                  as: 'class'
-              }
-          },
-          {
-              $lookup: {
-                  from: 'students',
-                  localField: 'commissions.student',
-                  foreignField: '_id',
-                  as: 'studentDetails'
-              }
-          },
-          {
-              $project: {
-                  'teacher': { $arrayElemAt: ['$teacher', 0] },
-                  'class': { $arrayElemAt: ['$class', 0] },
-                  'month': '$_id.month',
-                  'commissions': {
-                      $map: {
-                          input: '$commissions',
-                          as: 'commission',
-                          in: {
-                              _id: '$$commission._id',
-                              student: {
-                                  $arrayElemAt: [
-                                      {
-                                          $filter: {
-                                              input: '$studentDetails',
-                                              as: 'student',
-                                              cond: { $eq: ['$$student._id', '$$commission.student'] }
-                                          }
-                                      },
-                                      0
-                                  ]
-                              },
-                              amount: '$$commission.amount',
-                              percentage: '$$commission.percentage',
-                              status: '$$commission.status',
-                              paymentDate: '$$commission.paymentDate'
-                          }
-                      }
-                  },
-                  'totalAmount': 1
-              }
-          }
-      ]);
-      
-      res.json(commissionsByClass);
-  } catch (err) {
-      res.status(500).json({ error: err.message });
-  }
-});
 
-// نقطة نهاية لدفع عمولة حصة محددة
-app.post('/api/accounting/teacher-commissions/pay-by-class', authenticate(['admin', 'accountant']), async (req, res) => {
-  try {
-      const { teacherId, classId, month, paymentMethod, paymentDate, percentage } = req.body;
-      
-      // البحث عن العمولات المعلقة للأستاذ والحصة والشهر المحددين
-      const commissions = await TeacherCommission.find({
-          teacher: teacherId,
-          class: classId,
-          month: month,
-          status: 'pending'
-      }).populate('student teacher class');
-      
-      if (commissions.length === 0) {
-          return res.status(404).json({ error: 'لا توجد عمولات معلقة لهذا الأستاذ في هذه الحصة لهذا الشهر' });
-      }
-      
-      let totalAmount = 0;
-      const paidCommissions = [];
-      
-      // دفع كل عمولة على حدة مع تطبيق النسبة المحددة
-      for (const commission of commissions) {
-          // إعادة حساب مبلغ العمولة بناءً على النسبة الجديدة إذا تم تغييرها
-          const originalPayment = await Payment.findOne({
-              student: commission.student._id,
-              class: commission.class._id,
-              month: commission.month
-          });
-          
-          let commissionAmount = commission.amount;
-          if (percentage && percentage != commission.percentage) {
-              // إعادة حساب العمولة بناءً على النسبة الجديدة
-              commissionAmount = originalPayment.amount * (percentage / 100);
-              commission.amount = commissionAmount;
-              commission.percentage = percentage;
-          }
-          
-          totalAmount += commissionAmount;
-          
-          // تحديث حالة العمولة إلى مدفوعة
-          commission.status = 'paid';
-          commission.paymentDate = paymentDate || new Date();
-          commission.paymentMethod = paymentMethod || 'cash';
-          commission.recordedBy = req.user.id;
-          await commission.save();
-          
-          // تسجيل المعاملة المالية (مصروف)
-          const expense = new Expense({
-              description: `عمولة الأستاذ ${commission.teacher.name} عن الطالب ${commission.student.name} لحصة ${commission.class.name} لشهر ${commission.month}`,
-              amount: commissionAmount,
-              category: 'salary',
-              type: 'teacher_payment',
-              recipient: {
-                  type: 'teacher',
-                  id: commission.teacher._id,
-                  name: commission.teacher.name
-              },
-              paymentMethod: paymentMethod || 'cash',
-              status: 'paid',
-              recordedBy: req.user.id
-          });
-          await expense.save();
-          
-          paidCommissions.push({
-              student: commission.student.name,
-              amount: commissionAmount,
-              originalAmount: originalPayment.amount
-          });
-      }
-      
-      res.json({
-          message: `تم دفع عمولة الحصة بنجاح بقيمة ${totalAmount.toLocaleString()} د.ج`,
-          totalAmount,
-          month: month,
-          paidCommissions,
-          count: commissions.length
-      });
-  } catch (err) {
-      res.status(500).json({ error: err.message });
-  }
-});
   app.get('/api/accounting/teacher-commissions', authenticate(['admin', 'accountant', 'teacher']), async (req, res) => {
     try {
       const { teacher, month, status } = req.query;
@@ -4321,77 +3542,27 @@ app.post('/api/accounting/teacher-commissions/pay-by-class', authenticate(['admi
 
   // Expenses
   app.get('/api/accounting/expenses', authenticate(['admin', 'accountant']), async (req, res) => {
-    try {
-        const { category, startDate, endDate, type } = req.query;
-        const query = {};
+  try {
+    const { category, startDate, endDate } = req.query;
+    const query = {};
 
-        if (category) query.category = category;
-        if (type) query.type = type;
-        if (startDate || endDate) {
-            query.date = {};
-            if (startDate) query.date.$gte = new Date(startDate);
-            if (endDate) query.date.$lte = new Date(endDate);
-        }
-
-        const expenses = await Expense.find(query)
-            .populate('recordedBy')
-            .sort({ date: -1 });
-
-        res.json(expenses);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
+    if (category) query.category = category;
+    if (startDate || endDate) {
+      query.date = {};
+      if (startDate) query.date.$gte = new Date(startDate);
+      if (endDate) query.date.$lte = new Date(endDate);
     }
-});
-// إضافة نقطة نهاية جديدة في الخادم
-app.get('/api/accounting/summary', authenticate(['admin', 'accountant']), async (req, res) => {
-  try {
-      // حساب الإيرادات (مدفوعات الطلاب)
-      const incomeResult = await Payment.aggregate([
-          { $match: { status: 'paid' } },
-          { $group: { _id: null, total: { $sum: '$amount' } } }
-      ]);
-      
-      // حساب المصروفات
-      const expenseResult = await Expense.aggregate([
-          { $match: { status: 'paid' } },
-          { $group: { _id: null, total: { $sum: '$amount' } } }
-      ]);
-      
-      // حساب المدفوعات المعلقة
-      const pendingCount = await Payment.countDocuments({ status: 'pending' });
-      
-      res.json({
-          totalIncome: incomeResult[0]?.total || 0,
-          totalExpenses: expenseResult[0]?.total || 0,
-          pendingPayments: pendingCount
-      });
-  } catch (err) {
-      res.status(500).json({ error: err.message });
-  }
-});
 
-// دالة محسنة باستخدام النقطة الجديدة
-async function updateDashboardStats() {
-  try {
-      const response = await fetch(`${API_BASE}/accounting/summary`, {
-          headers: {
-              'Authorization': `Bearer ${authToken}`
-          }
-      });
-      
-      if (response.ok) {
-          const data = await response.json();
-          const netProfit = data.totalIncome - data.totalExpenses;
-          
-          document.getElementById('totalIncome').textContent = `${data.totalIncome.toLocaleString()} د.ج`;
-          document.getElementById('totalExpenses').textContent = `${data.totalExpenses.toLocaleString()} د.ج`;
-          document.getElementById('netProfit').textContent = `${netProfit.toLocaleString()} د.ج`;
-          document.getElementById('pendingPayments').textContent = data.pendingPayments;
-      }
-  } catch (error) {
-      console.error('Error updating dashboard stats:', error);
+    const expenses = await Expense.find(query)
+      .populate('recordedBy')
+      .sort({ date: -1 });
+
+    res.json(expenses);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
-}
+  });
+
   app.post('/api/accounting/expenses', authenticate(['admin', 'accountant']), async (req, res) => {
   try {
     const { description, amount, category, paymentMethod } = req.body;
@@ -4773,31 +3944,42 @@ async function updateDashboardStats() {
 // Students count endpoint
 app.get('/api/students/count', async (req, res) => {
   try {
-      const count = await Student.countDocuments({ status: 'active' });
-      res.json({ count, status: 'success' });
+    const students = await Student.find({ status: 'active' });
+    res.json({ count: students.length, status: 'success' });
   } catch (error) {
-      res.status(500).json({ error: 'Failed to count students', status: 'error' });
+    console.error('Error counting students:', error);
+    res.status(500).json({ 
+      error: 'Failed to count students',
+      status: 'error'
+    });
   }
 });
-
 
 // Teachers count endpoint
 app.get('/api/teachers/count', async (req, res) => {
   try {
-      const count = await Teacher.countDocuments({ active: true });
-      res.json({ count, status: 'success' });
+    const teachers = await Teacher.find({ active: true });
+    res.json({ count: teachers.length, status: 'success' });
   } catch (error) {
-      res.status(500).json({ error: 'Failed to count teachers', status: 'error' });
+    console.error('Error counting teachers:', error);
+    res.status(500).json({ 
+      error: 'Failed to count teachers',
+      status: 'error'
+    });
   }
 });
 
 // Classes count endpoint
 app.get('/api/classes/count', async (req, res) => {
   try {
-      const count = await Class.countDocuments({});
-      res.json({ count, status: 'success' });
+    const classes = await Class.find({});
+    res.json({ count: classes.length, status: 'success' });
   } catch (error) {
-      res.status(500).json({ error: 'Failed to count classes', status: 'error' });
+    console.error('Error counting classes:', error);
+    res.status(500).json({ 
+      error: 'Failed to count classes',
+      status: 'error'
+    });
   }
 });
 
@@ -4885,12 +4067,6 @@ app.use((error, req, res, next) => {
       error: 'Internal server error',
       message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
   });
-});
-
-// favicon.ico
-app.get('/favicon.ico', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'assets', 'redox-icon.png'));
-
 });
 
 // Handle unhandled promise rejections
