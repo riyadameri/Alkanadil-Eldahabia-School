@@ -234,7 +234,7 @@ function drawPaymentReceipt(paymentData) {
     };
     
     // Load images
-    logoImg.src = 'assets/raid.jpg';
+    logoImg.src = 'assets/rouad.JPG';
     redoxLogo.src = 'assets/redox-icon.png';
     
     // Start drawing when logo loads (or if it fails)
@@ -8610,7 +8610,7 @@ function drawMultiPaymentReceipt(paymentsData) {
         // If image fails to load, continue without it
         drawReceiptContent();
     };
-    logoImg.src = 'assets/raid.jpg';
+    logoImg.src = 'assets/rouad.JPG';
     
     function drawReceiptContent() {
         // Main title with larger font
@@ -10463,7 +10463,7 @@ async function printAttendanceSheet(liveClassId) {
                 <div class="page">
                     <div class="header">
                         <div class="header-left">
-                            <img src="assets/raid.jpg" alt="شعار المدرسة" class="school-logo">
+                            <img src="assets/rouad.JPG" alt="شعار المدرسة" class="school-logo">
                             <div class="school-info">
                                 <div class="school-name">${liveClass.class.school?.name || 'أكادمية الرواد للتعليم و المعارف'}</div>
                                 <div class="document-title">كشف الحضور والغياب</div>
