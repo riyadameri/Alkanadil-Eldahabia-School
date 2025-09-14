@@ -700,36 +700,73 @@ require('dotenv').config();
   // JWT Authentication Middleware
   // Update authenticate middleware to check for accounting access
   // Update your authenticate middleware to handle single role or array
+  // const authenticate = (roles = []) => {
+  //   return (req, res, next) => {
+  //     try {
+  //       const token = req.headers.authorization?.split(' ')[1];
+        
+  //       if (!token) {
+  //         // For count endpoints, you might want to allow public access
+  //         if (req.path.includes('/count')) {
+  //           return next();
+  //         }
+  //         return res.status(401).json({ error: 'غير مصرح بالدخول' });
+  //       }
+  
+  //       const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  //       req.user = decoded;
+  
+  //       if (roles.length && !roles.includes(decoded.role)) {
+  //         return res.status(403).json({ error: 'غير مصرح بالوصول لهذه الصلاحية' });
+  //       }
+  
+  //       next();
+  //     } catch (err) {
+  //       // For count endpoints, allow continuation even if token is invalid
+  //       if (req.path.includes('/count')) {
+  //         return next();
+  //       }
+  //       res.status(401).json({ error: 'رمز الدخول غير صالح' });
+  //     }
+  //   };
+  // };
+
+
   const authenticate = (roles = []) => {
     return (req, res, next) => {
-      try {
-        const token = req.headers.authorization?.split(' ')[1];
-        
-        if (!token) {
-          // For count endpoints, you might want to allow public access
-          if (req.path.includes('/count')) {
-            return next();
-          }
-          return res.status(401).json({ error: 'غير مصرح بالدخول' });
+        try {
+            const token = req.headers.authorization?.split(' ')[1];
+            
+            if (!token) {
+                return res.status(401).json({ error: 'غير مصرح بالدخول' });
+            }
+            
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            req.user = decoded;
+            
+            if (roles.length && !roles.includes(decoded.role)) {
+                return res.status(403).json({ error: 'غير مصرح بالوصول لهذه الصلاحية' });
+            }
+            
+            next();
+        } catch (err) {
+            res.status(401).json({ error: 'رمز الدخول غير صالح' });
         }
-  
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = decoded;
-  
-        if (roles.length && !roles.includes(decoded.role)) {
-          return res.status(403).json({ error: 'غير مصرح بالوصول لهذه الصلاحية' });
-        }
-  
-        next();
-      } catch (err) {
-        // For count endpoints, allow continuation even if token is invalid
-        if (req.path.includes('/count')) {
-          return next();
-        }
-        res.status(401).json({ error: 'رمز الدخول غير صالح' });
-      }
     };
-  };
+};
+const optionalAuth = (req, res, next) => {
+  try {
+      const token = req.headers.authorization?.split(' ')[1];
+      if (token) {
+          const decoded = jwt.verify(token, process.env.JWT_SECRET);
+          req.user = decoded;
+      }
+      next();
+  } catch (err) {
+      next(); // استمر حتى لو فشلت المصادقة
+  }
+};
+
   
   // Email Configuration
   const transporter = nodemailer.createTransport({
@@ -3485,7 +3522,176 @@ app.get('/api/payments/:id', authenticate(['admin', 'secretary', 'accountant']),
       res.status(500).json({ error: err.message });
     }
   });
+// نقطة نهاية جديدة للحصول على العمولات مجمعة حسب الحصة
+app.get('/api/accounting/teacher-commissions-by-class', authenticate(['admin', 'accountant']), async (req, res) => {
+  try {
+      const { teacher, month, status, class: classId } = req.query;
+      const matchStage = {};
+      
+      if (teacher) matchStage.teacher = new mongoose.Types.ObjectId(teacher);
+      if (month) matchStage.month = month;
+      if (status) matchStage.status = status;
+      if (classId) matchStage.class = new mongoose.Types.ObjectId(classId);
+      
+      const commissionsByClass = await TeacherCommission.aggregate([
+          { $match: matchStage },
+          {
+              $group: {
+                  _id: {
+                      teacher: '$teacher',
+                      class: '$class',
+                      month: '$month'
+                  },
+                  commissions: { $push: '$$ROOT' },
+                  totalAmount: { $sum: '$amount' }
+              }
+          },
+          {
+              $lookup: {
+                  from: 'teachers',
+                  localField: '_id.teacher',
+                  foreignField: '_id',
+                  as: 'teacher'
+              }
+          },
+          {
+              $lookup: {
+                  from: 'classes',
+                  localField: '_id.class',
+                  foreignField: '_id',
+                  as: 'class'
+              }
+          },
+          {
+              $lookup: {
+                  from: 'students',
+                  localField: 'commissions.student',
+                  foreignField: '_id',
+                  as: 'studentDetails'
+              }
+          },
+          {
+              $project: {
+                  'teacher': { $arrayElemAt: ['$teacher', 0] },
+                  'class': { $arrayElemAt: ['$class', 0] },
+                  'month': '$_id.month',
+                  'commissions': {
+                      $map: {
+                          input: '$commissions',
+                          as: 'commission',
+                          in: {
+                              _id: '$$commission._id',
+                              student: {
+                                  $arrayElemAt: [
+                                      {
+                                          $filter: {
+                                              input: '$studentDetails',
+                                              as: 'student',
+                                              cond: { $eq: ['$$student._id', '$$commission.student'] }
+                                          }
+                                      },
+                                      0
+                                  ]
+                              },
+                              amount: '$$commission.amount',
+                              percentage: '$$commission.percentage',
+                              status: '$$commission.status',
+                              paymentDate: '$$commission.paymentDate'
+                          }
+                      }
+                  },
+                  'totalAmount': 1
+              }
+          }
+      ]);
+      
+      res.json(commissionsByClass);
+  } catch (err) {
+      res.status(500).json({ error: err.message });
+  }
+});
 
+// نقطة نهاية لدفع عمولة حصة محددة
+app.post('/api/accounting/teacher-commissions/pay-by-class', authenticate(['admin', 'accountant']), async (req, res) => {
+  try {
+      const { teacherId, classId, month, paymentMethod, paymentDate, percentage } = req.body;
+      
+      // البحث عن العمولات المعلقة للأستاذ والحصة والشهر المحددين
+      const commissions = await TeacherCommission.find({
+          teacher: teacherId,
+          class: classId,
+          month: month,
+          status: 'pending'
+      }).populate('student teacher class');
+      
+      if (commissions.length === 0) {
+          return res.status(404).json({ error: 'لا توجد عمولات معلقة لهذا الأستاذ في هذه الحصة لهذا الشهر' });
+      }
+      
+      let totalAmount = 0;
+      const paidCommissions = [];
+      
+      // دفع كل عمولة على حدة مع تطبيق النسبة المحددة
+      for (const commission of commissions) {
+          // إعادة حساب مبلغ العمولة بناءً على النسبة الجديدة إذا تم تغييرها
+          const originalPayment = await Payment.findOne({
+              student: commission.student._id,
+              class: commission.class._id,
+              month: commission.month
+          });
+          
+          let commissionAmount = commission.amount;
+          if (percentage && percentage != commission.percentage) {
+              // إعادة حساب العمولة بناءً على النسبة الجديدة
+              commissionAmount = originalPayment.amount * (percentage / 100);
+              commission.amount = commissionAmount;
+              commission.percentage = percentage;
+          }
+          
+          totalAmount += commissionAmount;
+          
+          // تحديث حالة العمولة إلى مدفوعة
+          commission.status = 'paid';
+          commission.paymentDate = paymentDate || new Date();
+          commission.paymentMethod = paymentMethod || 'cash';
+          commission.recordedBy = req.user.id;
+          await commission.save();
+          
+          // تسجيل المعاملة المالية (مصروف)
+          const expense = new Expense({
+              description: `عمولة الأستاذ ${commission.teacher.name} عن الطالب ${commission.student.name} لحصة ${commission.class.name} لشهر ${commission.month}`,
+              amount: commissionAmount,
+              category: 'salary',
+              type: 'teacher_payment',
+              recipient: {
+                  type: 'teacher',
+                  id: commission.teacher._id,
+                  name: commission.teacher.name
+              },
+              paymentMethod: paymentMethod || 'cash',
+              status: 'paid',
+              recordedBy: req.user.id
+          });
+          await expense.save();
+          
+          paidCommissions.push({
+              student: commission.student.name,
+              amount: commissionAmount,
+              originalAmount: originalPayment.amount
+          });
+      }
+      
+      res.json({
+          message: `تم دفع عمولة الحصة بنجاح بقيمة ${totalAmount.toLocaleString()} د.ج`,
+          totalAmount,
+          month: month,
+          paidCommissions,
+          count: commissions.length
+      });
+  } catch (err) {
+      res.status(500).json({ error: err.message });
+  }
+});
   app.get('/api/accounting/teacher-commissions', authenticate(['admin', 'accountant', 'teacher']), async (req, res) => {
     try {
       const { teacher, month, status } = req.query;
@@ -4115,27 +4321,77 @@ app.get('/api/payments/:id', authenticate(['admin', 'secretary', 'accountant']),
 
   // Expenses
   app.get('/api/accounting/expenses', authenticate(['admin', 'accountant']), async (req, res) => {
-  try {
-    const { category, startDate, endDate } = req.query;
-    const query = {};
+    try {
+        const { category, startDate, endDate, type } = req.query;
+        const query = {};
 
-    if (category) query.category = category;
-    if (startDate || endDate) {
-      query.date = {};
-      if (startDate) query.date.$gte = new Date(startDate);
-      if (endDate) query.date.$lte = new Date(endDate);
+        if (category) query.category = category;
+        if (type) query.type = type;
+        if (startDate || endDate) {
+            query.date = {};
+            if (startDate) query.date.$gte = new Date(startDate);
+            if (endDate) query.date.$lte = new Date(endDate);
+        }
+
+        const expenses = await Expense.find(query)
+            .populate('recordedBy')
+            .sort({ date: -1 });
+
+        res.json(expenses);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
-
-    const expenses = await Expense.find(query)
-      .populate('recordedBy')
-      .sort({ date: -1 });
-
-    res.json(expenses);
+});
+// إضافة نقطة نهاية جديدة في الخادم
+app.get('/api/accounting/summary', authenticate(['admin', 'accountant']), async (req, res) => {
+  try {
+      // حساب الإيرادات (مدفوعات الطلاب)
+      const incomeResult = await Payment.aggregate([
+          { $match: { status: 'paid' } },
+          { $group: { _id: null, total: { $sum: '$amount' } } }
+      ]);
+      
+      // حساب المصروفات
+      const expenseResult = await Expense.aggregate([
+          { $match: { status: 'paid' } },
+          { $group: { _id: null, total: { $sum: '$amount' } } }
+      ]);
+      
+      // حساب المدفوعات المعلقة
+      const pendingCount = await Payment.countDocuments({ status: 'pending' });
+      
+      res.json({
+          totalIncome: incomeResult[0]?.total || 0,
+          totalExpenses: expenseResult[0]?.total || 0,
+          pendingPayments: pendingCount
+      });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+      res.status(500).json({ error: err.message });
   }
-  });
+});
 
+// دالة محسنة باستخدام النقطة الجديدة
+async function updateDashboardStats() {
+  try {
+      const response = await fetch(`${API_BASE}/accounting/summary`, {
+          headers: {
+              'Authorization': `Bearer ${authToken}`
+          }
+      });
+      
+      if (response.ok) {
+          const data = await response.json();
+          const netProfit = data.totalIncome - data.totalExpenses;
+          
+          document.getElementById('totalIncome').textContent = `${data.totalIncome.toLocaleString()} د.ج`;
+          document.getElementById('totalExpenses').textContent = `${data.totalExpenses.toLocaleString()} د.ج`;
+          document.getElementById('netProfit').textContent = `${netProfit.toLocaleString()} د.ج`;
+          document.getElementById('pendingPayments').textContent = data.pendingPayments;
+      }
+  } catch (error) {
+      console.error('Error updating dashboard stats:', error);
+  }
+}
   app.post('/api/accounting/expenses', authenticate(['admin', 'accountant']), async (req, res) => {
   try {
     const { description, amount, category, paymentMethod } = req.body;
@@ -4517,42 +4773,31 @@ app.get('/api/payments/:id', authenticate(['admin', 'secretary', 'accountant']),
 // Students count endpoint
 app.get('/api/students/count', async (req, res) => {
   try {
-    const students = await Student.find({ status: 'active' });
-    res.json({ count: students.length, status: 'success' });
+      const count = await Student.countDocuments({ status: 'active' });
+      res.json({ count, status: 'success' });
   } catch (error) {
-    console.error('Error counting students:', error);
-    res.status(500).json({ 
-      error: 'Failed to count students',
-      status: 'error'
-    });
+      res.status(500).json({ error: 'Failed to count students', status: 'error' });
   }
 });
+
 
 // Teachers count endpoint
 app.get('/api/teachers/count', async (req, res) => {
   try {
-    const teachers = await Teacher.find({ active: true });
-    res.json({ count: teachers.length, status: 'success' });
+      const count = await Teacher.countDocuments({ active: true });
+      res.json({ count, status: 'success' });
   } catch (error) {
-    console.error('Error counting teachers:', error);
-    res.status(500).json({ 
-      error: 'Failed to count teachers',
-      status: 'error'
-    });
+      res.status(500).json({ error: 'Failed to count teachers', status: 'error' });
   }
 });
 
 // Classes count endpoint
 app.get('/api/classes/count', async (req, res) => {
   try {
-    const classes = await Class.find({});
-    res.json({ count: classes.length, status: 'success' });
+      const count = await Class.countDocuments({});
+      res.json({ count, status: 'success' });
   } catch (error) {
-    console.error('Error counting classes:', error);
-    res.status(500).json({ 
-      error: 'Failed to count classes',
-      status: 'error'
-    });
+      res.status(500).json({ error: 'Failed to count classes', status: 'error' });
   }
 });
 
@@ -4640,6 +4885,12 @@ app.use((error, req, res, next) => {
       error: 'Internal server error',
       message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
   });
+});
+
+// favicon.ico
+app.get('/favicon.ico', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'assets', 'redox-icon.png'));
+
 });
 
 // Handle unhandled promise rejections
