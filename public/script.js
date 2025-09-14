@@ -627,7 +627,7 @@ document.getElementById("print-text").addEventListener("click", async () => {
     const encoder = new TextEncoder();
     let text = '\x1B\x40'; // init
     text += '\x1B\x61\x01'; // center
-    text += "أكادمية الرواد للتعليم و المعارف\n";
+    text += "مدرسة الرائد التعليمية\n";
     text += "إيصال دفع شهري\n";
     text += "-------------------------\n";
     text += '\x1B\x61\x00'; // left align
@@ -10465,7 +10465,7 @@ async function printAttendanceSheet(liveClassId) {
                         <div class="header-left">
                             <img src="assets/raid.jpg" alt="شعار المدرسة" class="school-logo">
                             <div class="school-info">
-                                <div class="school-name">${liveClass.class.school?.name || 'أكادمية الرواد للتعليم و المعارف'}</div>
+                                <div class="school-name">${liveClass.class.school?.name || 'مدرسة الرائد التعليمية'}</div>
                                 <div class="document-title">كشف الحضور والغياب</div>
                             </div>
                         </div>
