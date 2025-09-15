@@ -2221,8 +2221,6 @@ async function loadStudentsForCards() {
     }
 }
 async function loadCards() {
-    await searchCards();
-
     try {
         const response = await fetch('/api/cards', {
             headers: getAuthHeaders()
@@ -2240,15 +2238,25 @@ async function loadCards() {
         
         cards.forEach((card, index) => {
             const row = document.createElement('tr');
+            
+            // إضافة تحقق لمعالجة الحالات التي يكون فيها student فارغًا
+            const studentName = card.student ? card.student.name : 'غير معين';
+            const studentId = card.student ? card.student.studentId : 'غير معين';
+            
             row.innerHTML = `
                 <td>${index + 1}</td>
                 <td>${card.uid}</td>
-                <td>${card.student.name} (${card.student.studentId})</td>
-                <td>${new Date(card.issueDate).toLocaleDateString('ar-EG')}</td>
+                <td>${studentName} (${studentId})</td>
+                <td>${card.issueDate ? new Date(card.issueDate).toLocaleDateString('ar-EG') : 'غير معروف'}</td>
                 <td>
                     <button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteCard('${card._id}')">
                         <i class="bi bi-trash"></i>
                     </button>
+                    ${!card.student ? `
+                    <button class="btn btn-sm btn-outline-warning btn-action ms-1" onclick="assignCardToStudent('${card._id}')">
+                        <i class="bi bi-link"></i>
+                    </button>
+                    ` : ''}
                 </td>
             `;
             tableBody.appendChild(row);
@@ -2258,6 +2266,57 @@ async function loadCards() {
         Swal.fire('خطأ', 'حدث خطأ أثناء تحميل بيانات البطاقات', 'error');
     }
 }
+
+async function assignCardToStudent(cardId) {
+    try {
+        // تحميل الطلاب المتاحين
+        const studentsResponse = await fetch('/api/students', {
+            headers: getAuthHeaders()
+        });
+        
+        if (studentsResponse.status === 401) {
+            logout();
+            return;
+        }
+        
+        const students = await studentsResponse.json();
+        
+        const { value: studentId } = await Swal.fire({
+            title: 'تعيين البطاقة لطالب',
+            input: 'select',
+            inputOptions: students.reduce((options, student) => {
+                options[student._id] = `${student.name} (${student.studentId})`;
+                return options;
+            }, {}),
+            inputPlaceholder: 'اختر الطالب',
+            showCancelButton: true,
+            confirmButtonText: 'تعيين',
+            cancelButtonText: 'إلغاء'
+        });
+        
+        if (studentId) {
+            const response = await fetch(`/api/cards/${cardId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...getAuthHeaders()
+                },
+                body: JSON.stringify({ student: studentId })
+            });
+            
+            if (response.ok) {
+                Swal.fire('نجاح', 'تم تعيين البطاقة للطالب بنجاح', 'success');
+                loadCards();
+            } else {
+                throw new Error('فشل في تعيين البطاقة');
+            }
+        }
+    } catch (err) {
+        console.error('Error assigning card:', err);
+        Swal.fire('خطأ', 'حدث خطأ أثناء تعيين البطاقة', 'error');
+    }
+}
+
 
 async function loadClassroomsForClassModal() {
     try {
