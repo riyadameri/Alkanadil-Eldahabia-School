@@ -2165,6 +2165,27 @@ app.get('/api/payments/:id', authenticate(['admin', 'secretary', 'accountant']),
     res.status(500).json({ error: err.message });
   }
 });
+
+// PUT /api/payments/:id/amount
+app.put('/api/payments/:id/amount', async (req, res) => {
+  try {
+      const { amount } = req.body;
+      const payment = await Payment.findByIdAndUpdate(
+          req.params.id,
+          { amount },
+          { new: true }
+      ).populate('student').populate('class');
+      
+      if (!payment) {
+          return res.status(404).json({ error: 'الدفعة غير موجودة' });
+      }
+      
+      res.json(payment);
+  } catch (err) {
+      res.status(500).json({ error: err.message });
+  }
+});
+
   // Messages
   app.get('/api/messages', authenticate(['admin', 'secretary']), async (req, res) => {
     try {

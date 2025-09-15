@@ -1439,7 +1439,7 @@ async function loadClassrooms() {
 
 // ...existing code...
 
-async function showStudentDetails(studentId, event = null) {
+window.showStudentDetails = async function(studentId, event = null) {
     if (event) event.stopPropagation();
 
     try {
@@ -1482,13 +1482,18 @@ async function showStudentDetails(studentId, event = null) {
             paymentsByClass[payment.class._id].payments.push(payment);
         });
 
-        // إنشاء HTML لعرض الحصص والمدفوعات
+        // إنشاء HTML لعرض الحصص والمدفوعات مع خيارات التحديد
         let classesHtml = '';
         Object.values(paymentsByClass).forEach(({ class: cls, payments }) => {
             classesHtml += `
                 <div class="card mb-3">
-                    <div class="card-header bg-light">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
                         <strong>${cls.name}</strong> (${cls.subject}) - ${getAcademicYearName(cls.academicYear)}
+                        <div>
+                            <input type="checkbox" class="form-check-input select-all-class" 
+                                data-class-id="${cls._id}" onchange="toggleSelectAllPayments('${cls._id}', this.checked)">
+                            <label class="form-check-label ms-1">تحديد الكل</label>
+                        </div>
                     </div>
                     <div class="card-body p-2">
                         <table class="table table-sm">
@@ -1507,11 +1512,21 @@ async function showStudentDetails(studentId, event = null) {
                                     <tr>
                                         <td>
                                             ${payment.status !== 'paid' ? `
-                                                <input type="checkbox" class="multi-pay-checkbox" data-payment='${JSON.stringify(payment)}'>
+                                                <input type="checkbox" class="multi-pay-checkbox form-check-input" 
+                                                    data-payment='${JSON.stringify(payment)}'
+                                                    data-class-id="${cls._id}" 
+                                                    onchange="updateSelectAllState('${cls._id}')">
                                             ` : ''}
                                         </td>
                                         <td>${payment.month}</td>
-                                        <td>${payment.amount} د.ج</td>
+                                        <td>
+                                            ${payment.status !== 'paid' ? `
+                                                <span class="editable-amount" data-payment-id="${payment._id}" 
+                                                    onclick="editPaymentAmount('${payment._id}', ${payment.amount})">
+                                                    ${payment.amount} د.ج
+                                                </span>
+                                            ` : `${payment.amount} د.ج`}
+                                        </td>
                                         <td>
                                             <span class="badge ${payment.status === 'paid' ? 'bg-success' : 'bg-warning'}">
                                                 ${payment.status === 'paid' ? 'مسدد' : 'قيد الانتظار'}
@@ -1541,9 +1556,9 @@ async function showStudentDetails(studentId, event = null) {
         // زر دفع وطباعة المحدد
         const multiPayBtn = `
             <div class="mt-3 text-center">
-<button class="btn btn-primary" onclick="payAndPrintSelectedPayments('${studentId}')">
-    <i class="bi bi-cash-coin me-2"></i> دفع وطباعة المحدد
-</button>
+                <button class="btn btn-primary" onclick="payAndPrintSelectedPayments('${studentId}')">
+                    <i class="bi bi-cash-coin me-2"></i> دفع وطباعة المحدد
+                </button>
             </div>
         `;
 
@@ -1574,6 +1589,83 @@ async function showStudentDetails(studentId, event = null) {
         Swal.fire('خطأ', 'حدث خطأ أثناء تحميل تفاصيل الطالب', 'error');
     }
 }
+
+// دالة لتعديل مبلغ الدفعة
+window.editPaymentAmount = async function(paymentId, currentAmount) {
+    try {
+        const { value: newAmount } = await Swal.fire({
+            title: 'تعديل مبلغ الدفعة',
+            input: 'number',
+            inputLabel: 'المبلغ الجديد',
+            inputValue: currentAmount,
+            inputAttributes: {
+                min: '0',
+                step: '100'
+            },
+            showCancelButton: true,
+            confirmButtonText: 'حفظ التعديل',
+            cancelButtonText: 'إلغاء',
+            inputValidator: (value) => {
+                if (!value || value <= 0) {
+                    return 'يرجى إدخال مبلغ صحيح أكبر من الصفر';
+                }
+            }
+        });
+
+        if (newAmount) {
+            // تحديث المبلغ في الخادم
+            const response = await fetch(`/api/payments/${paymentId}/amount`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...getAuthHeaders()
+                },
+                body: JSON.stringify({ amount: parseFloat(newAmount) })
+            });
+
+            if (response.ok) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'تم التعديل بنجاح',
+                    text: `تم تحديث مبلغ الدفعة إلى ${newAmount} د.ج`,
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+                
+                // إعادة تحميل تفاصيل الطالب بعد ثانيتين
+                setTimeout(() => {
+                    const studentId = document.querySelector('.student-details')?.dataset.studentId;
+                    if (studentId) {
+                        showStudentDetails(studentId);
+                    }
+                }, 2000);
+            } else {
+                // معالجة الردود غير الناجحة
+                if (response.status === 404) {
+                    throw new Error('نقطة النهاية غير موجودة. يرجى التحقق من الخادم.');
+                } else {
+                    const errorText = await response.text();
+                    let errorMessage = `فشل في تحديث المبلغ: ${response.status}`;
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        errorMessage = errorJson.error || errorMessage;
+                    } catch (e) {
+                        errorMessage = errorText || errorMessage;
+                    }
+                    throw new Error(errorMessage);
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Error editing payment amount:', err);
+        Swal.fire({
+            icon: 'error',
+            title: 'خطأ',
+            text: err.message || 'حدث خطأ أثناء تعديل المبلغ',
+            confirmButtonText: 'حسناً'
+        });
+    }
+};
 
 // دفع دفعة واحدة
 
@@ -2129,6 +2221,8 @@ async function loadStudentsForCards() {
     }
 }
 async function loadCards() {
+    await searchCards();
+
     try {
         const response = await fetch('/api/cards', {
             headers: getAuthHeaders()
@@ -2146,25 +2240,15 @@ async function loadCards() {
         
         cards.forEach((card, index) => {
             const row = document.createElement('tr');
-            
-            // إضافة تحقق لمعالجة الحالات التي يكون فيها student فارغًا
-            const studentName = card.student ? card.student.name : 'غير معين';
-            const studentId = card.student ? card.student.studentId : 'غير معين';
-            
             row.innerHTML = `
                 <td>${index + 1}</td>
                 <td>${card.uid}</td>
-                <td>${studentName} (${studentId})</td>
-                <td>${card.issueDate ? new Date(card.issueDate).toLocaleDateString('ar-EG') : 'غير معروف'}</td>
+                <td>${card.student.name} (${card.student.studentId})</td>
+                <td>${new Date(card.issueDate).toLocaleDateString('ar-EG')}</td>
                 <td>
                     <button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteCard('${card._id}')">
                         <i class="bi bi-trash"></i>
                     </button>
-                    ${!card.student ? `
-                    <button class="btn btn-sm btn-outline-warning btn-action ms-1" onclick="assignCardToStudent('${card._id}')">
-                        <i class="bi bi-link"></i>
-                    </button>
-                    ` : ''}
                 </td>
             `;
             tableBody.appendChild(row);
@@ -2203,55 +2287,7 @@ async function loadClassroomsForClassModal() {
         console.error('Error loading classrooms for class modal:', err);
     }
 }
-async function assignCardToStudent(cardId) {
-    try {
-        // تحميل الطلاب المتاحين
-        const studentsResponse = await fetch('/api/students', {
-            headers: getAuthHeaders()
-        });
-        
-        if (studentsResponse.status === 401) {
-            logout();
-            return;
-        }
-        
-        const students = await studentsResponse.json();
-        
-        const { value: studentId } = await Swal.fire({
-            title: 'تعيين البطاقة لطالب',
-            input: 'select',
-            inputOptions: students.reduce((options, student) => {
-                options[student._id] = `${student.name} (${student.studentId})`;
-                return options;
-            }, {}),
-            inputPlaceholder: 'اختر الطالب',
-            showCancelButton: true,
-            confirmButtonText: 'تعيين',
-            cancelButtonText: 'إلغاء'
-        });
-        
-        if (studentId) {
-            const response = await fetch(`/api/cards/${cardId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...getAuthHeaders()
-                },
-                body: JSON.stringify({ student: studentId })
-            });
-            
-            if (response.ok) {
-                Swal.fire('نجاح', 'تم تعيين البطاقة للطالب بنجاح', 'success');
-                loadCards();
-            } else {
-                throw new Error('فشل في تعيين البطاقة');
-            }
-        }
-    } catch (err) {
-        console.error('Error assigning card:', err);
-        Swal.fire('خطأ', 'حدث خطأ أثناء تعيين البطاقة', 'error');
-    }
-}
+
 async function loadTeachersForClassModal() {
     try {
         const response = await fetch('/api/teachers', {
@@ -5672,7 +5708,6 @@ if (filteredCards.length === 0) {
 }
 
 filteredCards.forEach((card, index) => {
-    
     const row = document.createElement('tr');
     row.innerHTML = `
         <td>${index + 1}</td>
@@ -8370,18 +8405,36 @@ function updateSelectAllState(classId) {
 }
 
 // دفع دفعة واحدة
+// تعديل دالة دفع الدفعة الواحدة لاستخدام المبلغ المحدث
 window.paySinglePayment = async function(paymentId) {
     try {
+        // أولاً، الحصول على أحدث بيانات الدفعة
+        const paymentResponse = await fetch(`/api/payments/${paymentId}`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!paymentResponse.ok) {
+            throw new Error('فشل في جلب بيانات الدفعة');
+        }
+        
+        const payment = await paymentResponse.json();
+        
+        // استخدام المبلغ الحالي للدفعة
         const response = await fetch(`/api/payments/${paymentId}/pay`, {
             method: 'PUT',
             headers: getAuthHeaders(),
-            body: JSON.stringify({ paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'cash' })
+            body: JSON.stringify({ 
+                paymentDate: new Date().toISOString().split('T')[0], 
+                paymentMethod: 'cash',
+                amount: payment.amount // استخدام المبلغ المحدث
+            })
         });
+        
         if (response.ok) {
             const updatedPayment = await response.json();
             await printPaymentReceiptToThermalPrinter(updatedPayment);
             Swal.fire('نجاح', 'تم دفع الدفعة وطباعتها', 'success');
-            // إعادة تحميل التفاصيلz
+            // إعادة تحميل التفاصيل
             showStudentDetails(updatedPayment.student._id);
         } else {
             throw new Error('فشل في دفع الدفعة');
@@ -8390,12 +8443,11 @@ window.paySinglePayment = async function(paymentId) {
         Swal.fire('خطأ', err.message, 'error');
     }
 };
-
 // دفع وطباعة دفعات متعددة
 // دفع وطباعة دفعات متعددة
 async function payAndPrintSelectedPayments() {
     try {
-        // Get all selected checkboxes
+        // الحصول على جميع المدفوعات المحددة
         const selectedCheckboxes = document.querySelectorAll('.multi-pay-checkbox:checked');
         
         if (selectedCheckboxes.length === 0) {
@@ -8403,33 +8455,33 @@ async function payAndPrintSelectedPayments() {
             return;
         }
         
-        // Extract payment IDs from checkboxes
+        // استخراج بيانات المدفوعات
         const selectedPayments = Array.from(selectedCheckboxes).map(checkbox => {
-            const paymentData = JSON.parse(checkbox.dataset.payment);
-            return paymentData._id;
+            return JSON.parse(checkbox.dataset.payment);
         });
         
-        // Show loading indicator
-        Swal.fire({
-            title: 'جاري المعالجة',
-            text: 'يرجى الانتظار أثناء دفع وطباعة الدفعات المحددة',
-            icon: 'info',
-            showConfirmButton: false,
-            allowOutsideClick: false
-        });
-        
-        // Pay selected payments
-        for (const paymentId of selectedPayments) {
-            await fetch(`/api/payments/${paymentId}/pay`, {
-                method: 'PUT',
-                headers: getAuthHeaders(),
-                body: JSON.stringify({
-                    paymentDate: new Date().toISOString().split('T')[0],
-                    paymentMethod: 'cash'
-                })
+        // دفع كل دفعة مع المبلغ المحدث
+        for (const payment of selectedPayments) {
+            // الحصول على أحدث بيانات الدفعة من الخادم
+            const paymentResponse = await fetch(`/api/payments/${payment._id}`, {
+                headers: getAuthHeaders()
             });
-        }
-        
+            
+            if (paymentResponse.ok) {
+                const latestPayment = await paymentResponse.json();
+                
+                // دفع الدفعة بالمبلغ المحدث
+                await fetch(`/api/payments/${payment._id}/pay`, {
+                    method: 'PUT',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({
+                        paymentDate: new Date().toISOString().split('T')[0],
+                        paymentMethod: 'cash',
+                        amount: latestPayment.amount
+                    })
+                });
+            }
+        }        
         // Get payment details for printing
         const response = await fetch('/api/payments/bulk', {
             method: 'POST',
