@@ -1287,28 +1287,37 @@ function showStudentModal(student) {
 // في قسم loadStudents()، تحديث الصفوف لتشمل زر عرض التفاصيل
 async function loadStudents() {
     try {
-        const response = await fetch('/api/students', {
-            headers: getAuthHeaders()
-        });
+      const response = await fetch('/api/students', {
+        headers: getAuthHeaders()
+      });
+      
+      if (response.status === 401) {
+        logout();
+        return;
+      }
+      
+      const students = await response.json();
+      
+      const tableBody = document.getElementById('studentsTable');
+      tableBody.innerHTML = '';
+      
+      students.forEach((student, index) => {
+        const row = document.createElement('tr');
+        row.dataset.studentId = student._id; // إضافة معرف الطالب
         
-        if (response.status === 401) {
-            logout();
-            return;
+        // إضافة صنف تحذيري للطلاب الذين لم يدفعوا حقوق التسجيل
+        if (!student.hasPaidRegistration) {
+          row.classList.add('table-warning');
+          row.title = 'لم يدفع حقوق التسجيل';
+        } else {
+          row.classList.add('table-success');
         }
-        
-        const students = await response.json();
-        
-        const tableBody = document.getElementById('studentsTable');
-        tableBody.innerHTML = '';
-        
-        students.forEach((student, index) => {
-            const row = document.createElement('tr');
+  
             row.style.cursor = 'pointer';
-        
             row.addEventListener('click', () => {
                 showStudentModal(student);
             });
-        
+            
             row.innerHTML = `
                 <td>${index + 1}</td>
                 <td>${student.name}</td>
@@ -1317,23 +1326,109 @@ async function loadStudents() {
                 <td>${getAcademicYearName(student.academicYear) || '-'}</td>
                 <td>${student.classes?.length || 0}</td>
                 <td>
+                    ${!student.hasPaidRegistration ? 
+                        '<span class="badge bg-warning">لم يدفع التسجيل</span>' : 
+                        '<span class="badge bg-success">مسدد</span>'
+                    }
+                </td>
+                <td>
                     <button class="btn btn-sm btn-outline-primary btn-action" onclick="showStudentDetails('${student._id}', event)">
-                        <i class="bi bi-eye"></i> دقع الحصص
+                        <i class="bi bi-eye"></i> تفاصيل
                     </button>
+                    ${!student.hasPaidRegistration ? 
+                        `<button class="btn btn-sm btn-success btn-action ms-1" onclick="payRegistrationFee('${student._id}')">
+                            <i class="bi bi-cash"></i> دفع التسجيل
+                        </button>` : 
+                        ''
+                    }
                 </td>
             `;
             tableBody.appendChild(row);
         });
         
         document.getElementById('studentsCount').textContent = students.length;
+            updateDashboardCounters();
+
     } catch (err) {
         console.error('Error loading students:', err);
         Swal.fire('خطأ', 'حدث خطأ أثناء تحميل بيانات الطلاب', 'error');
     }
 }
+async function payRegistrationFee(studentId) {
+  try {
+    const { isConfirmed } = await Swal.fire({
+      title: 'دفع حقوق التسجيل',
+      text: 'هل تريد دفع حقوق التسجيل بقيمة 600 دج؟',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'نعم، دفع',
+      cancelButtonText: 'إلغاء'
+    });
+
+    if (!isConfirmed) return;
+
+    const response = await fetch(`/api/students/${studentId}/pay-registration`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        amount: 600,
+        paymentDate: new Date().toISOString(),
+        paymentMethod: 'cash'
+      })
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      
+      // طباعة الإيصال
+      await printRegistrationReceipt(result.student, 600, result.receiptNumber);
+      
+      Swal.fire('نجاح', 'تم دفع حقوق التسجيل بنجاح', 'success');
+      
+      // تحديث قائمة الطلاب - التأكد من استدعاء الدالة بشكل صحيح
+      await loadStudents(); // إضافة await للتأكد من اكتمال التحميل
+      
+      // يمكنك أيضاً إضافة تحديث يدوي للصف إذا لزم الأمر
+      updateStudentRowInUI(studentId, true);
+    } else {
+      const error = await response.json();
+      throw new Error(error.error || 'فشل في عملية الدفع');
+    }
+  } catch (err) {
+    console.error('Error paying registration fee:', err);
+    Swal.fire('خطأ', err.message, 'error');
+  }
+}
 
 
 
+
+
+function updateStudentRowInUI(studentId, hasPaid) {
+    const rows = document.querySelectorAll('#studentsTable tr');
+    rows.forEach(row => {
+      if (row.dataset.studentId === studentId) {
+        if (hasPaid) {
+          row.classList.remove('table-warning');
+          row.classList.add('table-success');
+          
+          // تحديث badge
+          const badge = row.querySelector('.badge');
+          if (badge) {
+            badge.className = 'badge bg-success';
+            badge.textContent = 'مسدد';
+          }
+          
+          // إزالة زر الدفع
+          const payButton = row.querySelector('.btn-success');
+          if (payButton) {
+            payButton.remove();
+          }
+        }
+      }
+    });
+  }
+  
 async function loadTeachers() {
     try {
         const response = await fetch('/api/teachers', {
@@ -2457,8 +2552,11 @@ document.getElementById('saveStudentBtn').addEventListener('click', async () => 
         academicYear: document.getElementById('academicYear').value,
         registrationDate: document.getElementById('registrationDate').value || new Date(),
         active: 'true',
-        status: 'active'
+        status: 'active',
+        hasPaidRegistration: false // إضافة هذا الحقل
     };
+
+
 
     try {
         const response = await fetch('/api/students', {
@@ -3302,7 +3400,9 @@ window.showClassStudents = async function(classId, selectedMonth = null, viewMod
                                             <th>ولي الأمر</th>
                                             <th>هاتف ولي الأمر</th>
                                             <th>الصف الدراسي</th>
+                                            
                                             <th>الإجراءات</th>
+                                            
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -7420,6 +7520,9 @@ function updateClassesTable(classes) {
 
 
 async function printRegistrationReceipt(studentData, amount = 600) {
+    // تحديد نوع الإيصال (تسجيل أو شهري)
+    const isRegistrationReceipt = amount === 600;
+    
     return new Promise((resolve) => {
         const iframe = document.createElement('iframe');
         iframe.style.display = 'none';
@@ -7433,229 +7536,109 @@ async function printRegistrationReceipt(studentData, amount = 600) {
             <html lang="ar" dir="rtl">
             <head>
                 <meta charset="UTF-8">
-                <title>إيصال تسجيل طالب</title>
+                <title>${isRegistrationReceipt ? 'إيصال تسجيل طالب' : 'إيصال دفع شهري'}</title>
                 <style>
-                    @page {
-                        size: A4;
-                        margin: 0;
-                    }
+                    /* أنماط الطباعة */
                     body {
-                        width: 210mm;
-                        height: 297mm;
-                        margin: 0;
-                        padding: 0;
                         font-family: 'Arial', sans-serif;
+                        margin: 0;
+                        padding: 20px;
                         color: #333;
-                        line-height: 1.6;
-                        display: flex;
-                        justify-content: center;
-                        align-items: center;
                     }
-                    .receipt-container {
-                        width: 150mm;
-                        height: auto;
-                        border: 2px solid #3498db;
-                        border-radius: 5px;
-                        padding: 10mm;
-                        box-sizing: border-box;
-                        position: relative;
-                        overflow: hidden;
-                        box-shadow: 0 0 10px rgba(0,0,0,0.1);
-                    }
-                    .logo-container {
-                        background-color: #000;
-                        padding: 10px;
-                        border-radius: 5px;
-                        display: inline-block;
-                        margin-bottom: 15px;
-                    }
-                    .logo {
-                        height: 40px;
-                        filter: brightness(0) invert(1);
-                        
-                    }
-                    .header {
+                    .receipt-header {
                         text-align: center;
-                        margin-bottom: 15px;
+                        margin-bottom: 20px;
                         border-bottom: 2px solid #3498db;
                         padding-bottom: 10px;
                     }
-                    .title {
+                    .receipt-title {
+                        font-size: 24px;
+                        font-weight: bold;
                         color: #2c3e50;
-                        margin: 10px 0 5px;
-                        font-size: 20px;
-                    }
-                    .subtitle {
-                        color: #7f8c8d;
-                        font-size: 12px;
                     }
                     .receipt-details {
-                        margin: 15px 0;
+                        margin: 20px 0;
                     }
                     .detail-row {
                         display: flex;
                         justify-content: space-between;
                         margin-bottom: 10px;
-                        padding-bottom: 6px;
-                        border-bottom: 1px dashed #ddd;
-                        font-size: 12px;
                     }
                     .detail-label {
                         font-weight: bold;
-                        color: #2c3e50;
-                        width: 40%;
-                    }
-                    .detail-value {
-                        color: #34495e;
-                        width: 60%;
-                        text-align: left;
                     }
                     .amount-section {
-                        background-color: #f8f9fa;
-                        padding: 10px;
-                        border-radius: 5px;
-                        margin: 15px 0;
                         text-align: center;
-                        border: 1px solid #eee;
+                        margin: 30px 0;
+                        padding: 15px;
+                        background-color: #f8f9fa;
+                        border-radius: 5px;
                     }
                     .amount {
-                        font-size: 22px;
-                        color: #e74c3c;
+                        font-size: 28px;
                         font-weight: bold;
-                        margin: 5px 0;
-                    }
-                    .barcode {
-                        text-align: center;
-                        margin: 15px 0;
-                        padding: 8px;
-                        background-color: #f8f9fa;
-                        border-radius: 5px;
+                        color: #e74c3c;
                     }
                     .footer {
                         text-align: center;
-                        margin-top: 20px;
-                        font-size: 10px;
-                        color: #7f8c8d;
-                        border-top: 2px solid #3498db;
-                        padding-top: 8px;
-                    }
-                    .signature {
-                        display: flex;
-                        justify-content: space-between;
                         margin-top: 30px;
+                        font-size: 14px;
+                        color: #7f8c8d;
                     }
-                    .signature-line {
-                        border-top: 1px solid #333;
-                        width: 150px;
-                        text-align: center;
-                        padding-top: 5px;
-                        font-size: 10px;
-                    }
-                    .watermark {
-                        position: absolute;
-                        opacity: 0.05;
-                        font-size: 80px;
-                        color: #3498db;
-                        transform: rotate(-30deg);
-                        left: 50%;
-                        top: 50%;
-                        z-index: 0;
-                        font-weight: bold;
-                        pointer-events: none;
+                    @media print {
+                        body {
+                            width: 80mm;
+                            margin: 0;
+                            padding: 10px;
+                        }
                     }
                 </style>
             </head>
             <body>
-                <div class="receipt-container">
-                    <div class="watermark">${studentData.studentId}</div>
-                    
-                    <div class="header">
-                        <div class="logo-container">
-                            <img src="https://redoxcsl.web.app/assets/redox-icon.png" class="logo">
-                        </div>
-                        <h1 class="title">إيصال تسجيل طالب</h1>
-                        <p class="subtitle">${new Date().toLocaleDateString('ar-EG', { 
-                            weekday: 'long', 
-                            year: 'numeric', 
-                            month: 'long', 
-                            day: 'numeric' 
-                        })}</p>
+                <div class="receipt-header">
+                    <div class="receipt-title">${isRegistrationReceipt ? 'إيصال تسجيل طالب' : 'إيصال دفع شهري'}</div>
+                    <div>أكاديمية الرواد للتعليم والمعارف</div>
+                </div>
+                
+                <div class="receipt-details">
+                    <div class="detail-row">
+                        <span class="detail-label">اسم الطالب:</span>
+                        <span>${studentData.name}</span>
                     </div>
-                    
-                    <div class="receipt-details">
-                        <div class="detail-row">
-                            <span class="detail-label">رقم الإيصال:</span>
-                            <span class="detail-value">REG-${Date.now().toString().slice(-6)}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">اسم الطالب:</span>
-                            <span class="detail-value">${studentData.name}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">رقم الطالب:</span>
-                            <span class="detail-value">${studentData.studentId}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">تاريخ الميلاد:</span>
-                            <span class="detail-value">${studentData.birthDate ? new Date(studentData.birthDate).toLocaleDateString('ar-EG') : 'غير محدد'}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">ولي الأمر:</span>
-                            <span class="detail-value">${studentData.parentName || 'غير محدد'}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">هاتف ولي الأمر:</span>
-                            <span class="detail-value">${studentData.parentPhone || 'غير محدد'}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">السنة الدراسية:</span>
-                            <span class="detail-value">${getAcademicYearName(studentData.academicYear) || 'غير محدد'}</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">تاريخ التسجيل:</span>
-                            <span class="detail-value">${new Date(studentData.registrationDate || new Date()).toLocaleDateString('ar-EG')}</span>
-                        </div>
+                    <div class="detail-row">
+                        <span class="detail-label">رقم الطالب:</span>
+                        <span>${studentData.studentId}</span>
                     </div>
-                    
-                    <div class="amount-section">
-                        <h3>المبلغ المدفوع</h3>
-                        <div class="amount">${amount} دينار جزائري</div>
-                        <p>(${convertNumberToArabicWords(amount)} ديناراً فقط لا غير)</p>
+                    <div class="detail-row">
+                        <span class="detail-label">ولي الأمر:</span>
+                        <span>${studentData.parentName || 'غير محدد'}</span>
                     </div>
-                    
-                    <div class="barcode">
-                        <svg id="barcode"></svg>
+                    <div class="detail-row">
+                        <span class="detail-label">نوع الدفع:</span>
+                        <span>${isRegistrationReceipt ? 'حقوق التسجيل' : 'الدفع الشهري'}</span>
                     </div>
-                    
-                    <div class="signature">
-                        <div class="signature-line">توقيع المسؤول</div>
-                        <div class="signature-line">توقيع ولي الأمر</div>
-                    </div>
-                    
-                    <div class="footer">
-                        <p>شكراً لثقتكم بنا - نتمنى لطالبنا النجاح والتوفيق</p>
-                        <p>للاستفسار: 1234567890 - info@school.com</p>
+                    <div class="detail-row">
+                        <span class="detail-label">التاريخ:</span>
+                        <span>${new Date().toLocaleDateString('ar-EG')}</span>
                     </div>
                 </div>
                 
-                <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+                <div class="amount-section">
+                    <div>المبلغ المدفوع</div>
+                    <div class="amount">${amount} دينار جزائري</div>
+                    <div>(${convertNumberToArabicWords(amount)} ديناراً فقط لا غير)</div>
+                </div>
+                
+                <div class="footer">
+                    <p>شكراً لثقتكم بنا</p>
+                    <p>الهاتف: 0559581957 | البريد: info@redox.com</p>
+                </div>
+                
                 <script>
-                    JsBarcode("#barcode", "${studentData.studentId}", {
-                        format: "CODE128",
-                        lineColor: "#2c3e50",
-                        width: 1.5,
-                        height: 50,
-                        displayValue: true,
-                        fontSize: 12,
-                        margin: 5
-                    });
-                    
                     window.onload = function() {
+                        window.print();
                         setTimeout(function() {
-                            window.print();
-                            setTimeout(function() {
-                                window.close();
-                            }, 500);
+                            window.close();
                         }, 500);
                     };
                 </script>
@@ -7670,6 +7653,7 @@ async function printRegistrationReceipt(studentData, amount = 600) {
         };
     });
 }
+
 
 function simulateCardScan() {
     setInterval(() => {
@@ -7686,40 +7670,45 @@ function simulateCardScan() {
     }, 3000);
 }
 
-
 async function updateDashboardCounters() {
     try {
-    // تحميل عدد الطلاب
-    const studentsResponse = await fetch('/api/students/count', {
-        headers: getAuthHeaders()
-    });
-    if (studentsResponse.ok) {
-        const studentsCount = await studentsResponse.json();
-        document.getElementById('studentsCount').textContent = studentsCount;
-    }
-
-    // تحميل عدد الأساتذة
-    const teachersResponse = await fetch('/api/teachers/count', {
-        headers: getAuthHeaders()
-    });
-    if (teachersResponse.ok) {
-        const teachersCount = await teachersResponse.json();
-        document.getElementById('teachersCount').textContent = teachersCount;
-    }
-
-    // تحميل عدد الحصص
-    const classesResponse = await fetch('/api/classes/count', {
-        headers: getAuthHeaders()
-    });
-    if (classesResponse.ok) {
-        const classesCount = await classesResponse.json();
-        document.getElementById('classesCount').textContent = classesCount;
-    }
-
+        // تحميل عدد الطلاب
+        const studentsResponse = await fetch('/api/students', {
+            headers: getAuthHeaders()
+        });
+        
+        if (studentsResponse.ok) {
+            const students = await studentsResponse.json();
+            const totalStudents = students.length;
+            const unpaidRegistration = students.filter(s => !s.hasPaidRegistration).length;
+            
+            document.getElementById('studentsCount').textContent = totalStudents;
+            
+            // إضافة عنصر جديد لعرض الطلاب الذين لم يدفعوا
+            let unpaidElement = document.getElementById('unpaidRegistrationCount');
+            if (!unpaidElement) {
+                unpaidElement = document.createElement('div');
+                unpaidElement.id = 'unpaidRegistrationCount';
+                unpaidElement.className = 'col-md-3';
+                document.querySelector('.dashboard-counters').appendChild(unpaidElement);
+            }
+            
+            unpaidElement.innerHTML = `
+                <div class="card counter-card bg-warning text-dark">
+                    <div class="card-body text-center">
+                        <h6>طلاب بانتظار دفع التسجيل</h6>
+                        <h3>${unpaidRegistration}</h3>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // باقي عدادات الداشبورد...
     } catch (err) {
-    console.error('Error updating dashboard counters:', err);
+        console.error('Error updating dashboard counters:', err);
     }
 }
+
 
 
 function loadStudentsTable() {
@@ -7849,7 +7838,70 @@ window.showAssignCardModal = function(uid) {
         });
     }, 500);
 };
-
+async function updateDashboardStats() {
+    try {
+      // جلب الإيرادات (مدفوعات الطلاب + رسوم التسجيل)
+      const paymentsResponse = await fetch(`${API_BASE}/payments?status=paid`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      
+      // جلب رسوم التسجيل المدفوعة
+      const schoolFeesResponse = await fetch(`${API_BASE}/accounting/school-fees?status=paid`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      
+      // جلب المصروفات
+      const expensesResponse = await fetch(`${API_BASE}/accounting/expenses?status=paid`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      
+      let totalIncome = 0;
+      let totalExpenses = 0;
+      
+      if (paymentsResponse.ok) {
+        const payments = await paymentsResponse.json();
+        totalIncome = payments.reduce((sum, payment) => sum + payment.amount, 0);
+      }
+      
+      if (schoolFeesResponse.ok) {
+        const schoolFees = await schoolFeesResponse.json();
+        totalIncome += schoolFees.reduce((sum, fee) => sum + fee.amount, 0);
+      }
+      
+      if (expensesResponse.ok) {
+        const expenses = await expensesResponse.json();
+        totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+      }
+      
+      const netProfit = totalIncome - totalExpenses;
+      
+      // تحديث واجهة المستخدم
+      document.getElementById('totalIncome').textContent = `${totalIncome.toLocaleString()} د.ج`;
+      document.getElementById('totalExpenses').textContent = `${totalExpenses.toLocaleString()} د.ج`;
+      document.getElementById('netProfit').textContent = `${netProfit.toLocaleString()} د.ج`;
+      
+      // جلب عدد المدفوعات المعلقة
+      const pendingResponse = await fetch(`${API_BASE}/payments?status=pending`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      
+      if (pendingResponse.ok) {
+        const pendingPayments = await pendingResponse.json();
+        document.getElementById('pendingPayments').textContent = pendingPayments.length || 0;
+      }
+      
+    } catch (error) {
+      console.error('Error updating dashboard stats:', error);
+    }
+  }
 function setupRFIDInputHandling() {
     // Handle manual RFID input in gate interface
     const manualInput = document.getElementById('manualRFIDInput');

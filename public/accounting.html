@@ -4675,58 +4675,69 @@
     }
     }
     async function updateDashboardStats() {
-    try {
-        // جلب الإيرادات (مدفوعات الطلاب)
-        const paymentsResponse = await fetch(`${API_BASE}/payments?status=paid`, {
-            headers: {
-                'Authorization': `Bearer ${authToken}`
-            }
-        });
-        
-        // جلب المصروفات
-        const expensesResponse = await fetch(`${API_BASE}/accounting/expenses?status=paid`, {
-            headers: {
-                'Authorization': `Bearer ${authToken}`
-            }
-        });
-        
-        let totalIncome = 0;
-        let totalExpenses = 0;
-        
-        if (paymentsResponse.ok) {
-            const payments = await paymentsResponse.json();
-            totalIncome = payments.reduce((sum, payment) => sum + payment.amount, 0);
-        }
-        
-        if (expensesResponse.ok) {
-            const expenses = await expensesResponse.json();
-            totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
-        }
-        
-        const netProfit = totalIncome - totalExpenses;
-        
-        // تحديث واجهة المستخدم
-        document.getElementById('totalIncome').textContent = `${totalIncome.toLocaleString()} د.ج`;
-        document.getElementById('totalExpenses').textContent = `${totalExpenses.toLocaleString()} د.ج`;
-        document.getElementById('netProfit').textContent = `${netProfit.toLocaleString()} د.ج`;
-        
-        // جلب عدد المدفوعات المعلقة
-        const pendingResponse = await fetch(`${API_BASE}/payments?status=pending`, {
-            headers: {
-                'Authorization': `Bearer ${authToken}`
-            }
-        });
-        
-        if (pendingResponse.ok) {
-            const pendingPayments = await pendingResponse.json();
-            document.getElementById('pendingPayments').textContent = pendingPayments.length || 0;
-        }
-        
-    } catch (error) {
-        console.error('Error updating dashboard stats:', error);
+  try {
+    // جلب الإيرادات (مدفوعات الطلاب + رسوم التسجيل)
+    const paymentsResponse = await fetch(`${API_BASE}/payments?status=paid`, {
+      headers: {
+        'Authorization': `Bearer ${authToken}`
+      }
+    });
+    
+    // جلب رسوم التسجيل المدفوعة
+    const schoolFeesResponse = await fetch(`${API_BASE}/accounting/school-fees?status=paid`, {
+      headers: {
+        'Authorization': `Bearer ${authToken}`
+      }
+    });
+    
+    // جلب المصروفات
+    const expensesResponse = await fetch(`${API_BASE}/accounting/expenses?status=paid`, {
+      headers: {
+        'Authorization': `Bearer ${authToken}`
+      }
+    });
+    
+    let totalIncome = 0;
+    let totalExpenses = 0;
+    
+    if (paymentsResponse.ok) {
+      const payments = await paymentsResponse.json();
+      totalIncome = payments.reduce((sum, payment) => sum + payment.amount, 0);
     }
+    
+    if (schoolFeesResponse.ok) {
+      const schoolFees = await schoolFeesResponse.json();
+      totalIncome += schoolFees.reduce((sum, fee) => sum + fee.amount, 0);
+    }
+    
+    if (expensesResponse.ok) {
+      const expenses = await expensesResponse.json();
+      totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+    }
+    
+    const netProfit = totalIncome - totalExpenses;
+    
+    // تحديث واجهة المستخدم
+    document.getElementById('totalIncome').textContent = `${totalIncome.toLocaleString()} د.ج`;
+    document.getElementById('totalExpenses').textContent = `${totalExpenses.toLocaleString()} د.ج`;
+    document.getElementById('netProfit').textContent = `${netProfit.toLocaleString()} د.ج`;
+    
+    // جلب عدد المدفوعات المعلقة
+    const pendingResponse = await fetch(`${API_BASE}/payments?status=pending`, {
+      headers: {
+        'Authorization': `Bearer ${authToken}`
+      }
+    });
+    
+    if (pendingResponse.ok) {
+      const pendingPayments = await pendingResponse.json();
+      document.getElementById('pendingPayments').textContent = pendingPayments.length || 0;
+    }
+    
+  } catch (error) {
+    console.error('Error updating dashboard stats:', error);
+  }
 }
-
     // توليد تقرير الميزانية
     async function generateBudgetReport() {
     try {

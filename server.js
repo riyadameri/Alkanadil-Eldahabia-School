@@ -69,7 +69,6 @@ require('dotenv').config();
       type: String, 
       unique: true,
       default: function() {
-        // إنشاء معرف فريد عند الإنشاء
         return 'STU-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
       }
     },
@@ -78,7 +77,7 @@ require('dotenv').config();
     parentPhone: { type: String, required: true },
     parentEmail: { type: String, required: false },
     registrationDate: { type: Date, default: Date.now },
-    active: { type: Boolean, default: true }, // Changed default to false
+    active: { type: Boolean, default: true },
     academicYear: { 
       type: String, 
       enum: ['1AS', '2AS', '3AS', '1MS', '2MS', '3MS', '4MS', '5MS' ,'1AP','2AP','3AP','4AP','5AP','NS', null , 'اولى ابتدائي', 'ثانية ابتدائي', 'ثالثة ابتدائي', 'رابعة ابتدائي', 'خامسة ابتدائي', 'غير محدد'],
@@ -89,9 +88,14 @@ require('dotenv').config();
     status: { 
       type: String, 
       enum: ['pending', 'active', 'inactive', 'banned'], 
-      default: 'pending' // New status for registration flow
+      default: 'pending'
     },
-    registrationData: { // Store additional registration info
+    // Add this field to track registration payment
+    hasPaidRegistration: { 
+      type: Boolean, 
+      default: false 
+    },
+    registrationData: {
       address: String,
       previousSchool: String,
       healthInfo: String,
@@ -869,7 +873,10 @@ app.get('/api/students', authenticate(['admin', 'secretary', 'accountant']), asy
     if (academicYear) query.academicYear = academicYear;
     if (active !== undefined) query.active = active === 'true';
 
-    const students = await Student.find(query).sort({ name: 1 });
+    const students = await Student.find(query)
+      .populate('classes')
+      .sort({ name: 1 });
+    
     res.json(students);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1106,14 +1113,14 @@ const validateObjectId = (req, res, next) => {
         })),
         ...schoolFees.map(f => ({
           _id: f._id,
-          type: 'income',
+          type: 'income', // تأكد من أن النوع income
           amount: f.amount,
           description: `رسوم تسجيل الطالب ${f.student?.name || 'غير معروف'}`,
-          category: 'registration',
+          category: 'registration', // نفس التصنيف المستخدم في المعاملات المالية
           date: f.paymentDate || f.createdAt,
           recordedBy: f.recordedBy,
           status: f.status,
-          transactionType: 'schoolFee'  // تمييز نوع المعاملة
+          transactionType: 'schoolFee'
         }))
       ].sort((a, b) => new Date(b.date) - new Date(a.date));
       
@@ -2784,7 +2791,7 @@ app.put('/api/payments/:id/amount', async (req, res) => {
   app.post('/api/student/register', async (req, res) => {
     try {
       console.log('Received registration data:', req.body);
-
+  
       // Validate required fields
       const requiredFields = ['name', 'academicYear', 'parentName', 'parentPhone'];
       for (const field of requiredFields) {
@@ -2794,7 +2801,7 @@ app.put('/api/payments/:id/amount', async (req, res) => {
           });
         }
       }
-
+  
       // Create student record
       const student = new Student({
         name: req.body.name,
@@ -2808,21 +2815,22 @@ app.put('/api/payments/:id/amount', async (req, res) => {
         healthInfo: req.body.healthInfo,
         status: 'pending',
         active: false,
-        registrationDate: new Date(),
-        status: 'pending',
-        active: false,
+        hasPaidRegistration: false, // Default to not paid
         registrationDate: new Date()
       });
-
+  
       await student.save();
+      
+      // Create a pending school fee record
       const schoolFee = new SchoolFee({
         student: student._id,
-        amount: 600, // 60 DZD
+        amount: 600, // 600 DZD
         status: 'pending'
       });
       await schoolFee.save();
+      
       console.log('Student registered successfully:', student);
-
+  
       res.status(201).json({
         message: 'تم استلام طلب التسجيل بنجاح',
         studentId: student._id
@@ -4068,7 +4076,8 @@ app.post('/api/accounting/teacher-commissions/pay-by-class', authenticate(['admi
   }
   });
 
-  app.put('/api/accounting/school-fees/:id/pay', authenticate(['admin', 'accountant']), async (req, res) => {
+// في نقطة نهاية دفع رسوم التسجيل (/api/accounting/school-fees/:id/pay)
+app.put('/api/accounting/school-fees/:id/pay', authenticate(['admin', 'accountant']), async (req, res) => {
   try {
     const fee = await SchoolFee.findById(req.params.id).populate('student');
     if (!fee) {
@@ -4083,7 +4092,7 @@ app.post('/api/accounting/teacher-commissions/pay-by-class', authenticate(['admi
 
     await fee.save();
 
-    // Create invoice
+    // إنشاء فاتورة
     const invoice = new Invoice({
       invoiceNumber: fee.invoiceNumber,
       type: 'school-fee',
@@ -4104,14 +4113,15 @@ app.post('/api/accounting/teacher-commissions/pay-by-class', authenticate(['admi
     });
     await invoice.save();
 
-    // Record financial transaction
+    // تسجيل المعاملة المالية - هذا هو الجزء الأهم
     const transaction = new FinancialTransaction({
-      type: 'income',
+      type: 'income', // يجب أن تكون من نوع income (إيراد)
       amount: fee.amount,
       description: `رسوم تسجيل الطالب ${fee.student.name}`,
-      category: 'tuition',
+      category: 'registration', // تأكد من أن هذا التصنيف موجود
       recordedBy: req.user.id,
-      reference: fee._id
+      reference: fee._id,
+      date: fee.paymentDate // تأكد من وجود تاريخ للمعاملة
     });
     await transaction.save();
 
@@ -4123,7 +4133,58 @@ app.post('/api/accounting/teacher-commissions/pay-by-class', authenticate(['admi
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-  });
+});
+// في نقطة نهاية دفع رسوم التسجيل (/api/students/:id/pay-registration)
+// Mark registration as paid
+app.post('/api/students/:id/pay-registration', authenticate(['admin', 'secretary', 'accountant']), async (req, res) => {
+  try {
+    const { amount, paymentDate, paymentMethod } = req.body;
+    const studentId = req.params.id;
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ error: 'الطالب غير موجود' });
+    }
+
+    // Update student payment status
+    student.hasPaidRegistration = true;
+    student.status = 'active'; // Activate student after payment
+    student.active = true;
+    await student.save();
+
+    // Create a school fee record
+    const schoolFee = new SchoolFee({
+      student: studentId,
+      amount: amount || 600, // 600 DZD default
+      paymentDate: paymentDate || new Date(),
+      paymentMethod: paymentMethod || 'cash',
+      status: 'paid',
+      invoiceNumber: `INV-SF-${Date.now()}`,
+      recordedBy: req.user.id
+    });
+    await schoolFee.save();
+
+    // Record financial transaction
+    const transaction = new FinancialTransaction({
+      type: 'income',
+      amount: amount || 600,
+      description: `رسوم تسجيل الطالب ${student.name}`,
+      category: 'registration',
+      recordedBy: req.user.id,
+      reference: schoolFee._id
+    });
+    await transaction.save();
+
+    res.json({
+      message: 'تم دفع حقوق التسجيل بنجاح',
+      student,
+      receiptNumber: schoolFee.invoiceNumber,
+      transactionId: transaction._id
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
   // Teacher Payments (70% of class fees)
   app.get('/api/accounting/teacher-payments', authenticate(['admin', 'accountant']), async (req, res) => {
@@ -4423,27 +4484,7 @@ app.get('/api/accounting/summary', authenticate(['admin', 'accountant']), async 
 });
 
 // دالة محسنة باستخدام النقطة الجديدة
-async function updateDashboardStats() {
-  try {
-      const response = await fetch(`${API_BASE}/accounting/summary`, {
-          headers: {
-              'Authorization': `Bearer ${authToken}`
-          }
-      });
-      
-      if (response.ok) {
-          const data = await response.json();
-          const netProfit = data.totalIncome - data.totalExpenses;
-          
-          document.getElementById('totalIncome').textContent = `${data.totalIncome.toLocaleString()} د.ج`;
-          document.getElementById('totalExpenses').textContent = `${data.totalExpenses.toLocaleString()} د.ج`;
-          document.getElementById('netProfit').textContent = `${netProfit.toLocaleString()} د.ج`;
-          document.getElementById('pendingPayments').textContent = data.pendingPayments;
-      }
-  } catch (error) {
-      console.error('Error updating dashboard stats:', error);
-  }
-}
+
   app.post('/api/accounting/expenses', authenticate(['admin', 'accountant']), async (req, res) => {
   try {
     const { description, amount, category, paymentMethod } = req.body;
