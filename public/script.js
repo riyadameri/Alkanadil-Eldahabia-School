@@ -1890,6 +1890,7 @@ async function loadPayments(studentId = null, classId = null, month = null) {
                 </td>
                 <td>${payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('ar-EG') : '-'}</td>
                 <td>
+                
                     <button class="btn btn-sm ${payment.status !== 'paid' ? 'btn-success' : 'btn-secondary'} btn-action" 
                         onclick="showPaymentModal('${payment._id}')" 
                         ${payment.status === 'paid' ? 'disabled' : ''}>
@@ -1899,7 +1900,12 @@ async function loadPayments(studentId = null, classId = null, month = null) {
                     <button class="btn btn-sm btn-info btn-action" onclick="reprintPaymentReceipt('${payment._id}')">
                         <i class="bi bi-printer"></i>
                     </button>
+                        <button class="btn btn-sm btn-outline-danger btn-action" onclick="deletePayment('${payment._id}')">
+        <i class="bi bi-trash"></i>
+    </button>
+
                     ` : ''}
+                    
                 </td>
             `;
             tableBody.appendChild(row);
@@ -2266,6 +2272,42 @@ async function loadCards() {
         Swal.fire('خطأ', 'حدث خطأ أثناء تحميل بيانات البطاقات', 'error');
     }
 }
+
+// Function to delete a payment
+async function deletePayment(paymentId) {
+    try {
+      // Confirm deletion
+      const result = await Swal.fire({
+        title: 'هل أنت متأكد؟',
+        text: "سيتم حذف هذه الدفعة بشكل دائم!",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'نعم، احذف',
+        cancelButtonText: 'إلغاء'
+      });
+  
+      if (result.isConfirmed) {
+        const response = await fetch(`/api/payments/${paymentId}`, {
+          method: 'DELETE',
+          headers: getAuthHeaders()
+        });
+  
+        if (response.ok) {
+          Swal.fire('تم الحذف!', 'تم حذف الدفعة بنجاح.', 'success');
+          // Refresh the payments table or student details
+          loadPayments(); // Or reload the current view
+        } else {
+          const error = await response.json();
+          throw new Error(error.error);
+        }
+      }
+    } catch (err) {
+      console.error('Error deleting payment:', err);
+      Swal.fire('خطأ!', err.message || 'فشل في حذف الدفعة', 'error');
+    }
+  }
 
 async function assignCardToStudent(cardId) {
     try {

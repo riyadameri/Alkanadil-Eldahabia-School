@@ -1987,7 +1987,38 @@ app.get('/api/accounting/reports/financial', authenticate(['admin', 'accountant'
   });
 
 
+// Payments - Delete a payment
+app.delete('/api/payments/:id', authenticate(['admin', 'accountant']), async (req, res) => {
+  try {
+    const paymentId = req.params.id;
 
+    // Optional: Check if the payment exists first
+    const payment = await Payment.findById(paymentId);
+    if (!payment) {
+      return res.status(404).json({ error: 'الدفعة غير موجودة' });
+    }
+
+    // Optional: Add logic to handle related records (e.g., reverse teacher commission)
+    // For example, if a commission was recorded, you might want to delete or mark it as cancelled
+    if (payment.commissionId) {
+      // Example: Delete the commission record
+      // await TeacherCommission.findByIdAndDelete(payment.commissionId);
+      // Or mark it as cancelled:
+      await TeacherCommission.findByIdAndUpdate(payment.commissionId, { status: 'cancelled' });
+    }
+
+    // Delete the payment
+    await Payment.findByIdAndDelete(paymentId);
+
+    // Alternatively, you might want to soft delete by updating status:
+    // await Payment.findByIdAndUpdate(paymentId, { status: 'cancelled' });
+
+    res.json({ message: 'تم حذف الدفعة بنجاح' });
+  } catch (err) {
+    console.error('Error deleting payment:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
   // Payments
 // Payments - Update the GET endpoint to populate class data
 // Update the GET /api/payments endpoint
