@@ -1466,6 +1466,8 @@ async function loadTeachers() {
         });
         
         document.getElementById('teachersCount').textContent = teachers.length;
+        document.getElementById('tNum').textContent = teachers.length;
+        
     } catch (err) {
         console.error('Error loading teachers:', err);
         Swal.fire('خطأ', 'حدث خطأ أثناء تحميل بيانات الأساتذة', 'error');
@@ -3429,7 +3431,7 @@ window.showClassStudents = async function(classId, selectedMonth = null, viewMod
                             </div>
                             
                             <div class="mt-3 text-center">
-                                <p class=" ">إجمالي عدد الطلاب: <strong>${activeStudents.length}</strong></p>
+                                <p class="text-muted">إجمالي عدد الطلاب: <strong>${activeStudents.length}</strong></p>
                             </div>
                         </div>
                     </div>
@@ -3532,7 +3534,7 @@ window.showClassStudents = async function(classId, selectedMonth = null, viewMod
                     return `
                     <div class="student-item card mb-4 shadow-sm" style="animation-delay: ${index * 0.1}s">
                         <div class="card-header d-flex justify-content-between align-items-center">
-                            <h5 class="mb-0">${student.name} <small class=" ">(${student.studentId})</small></h5>
+                            <h5 class="mb-0">${student.name} <small class="text-muted">(${student.studentId})</small></h5>
                             <div>
                                 <span class="badge ${totalPending === 0 ? 'bg-success' : 'bg-warning'} me-2">
                                     ${totalPending === 0 ? 'مسدد بالكامل' : `متأخر: ${totalPending} د.ك`}
@@ -3559,7 +3561,7 @@ window.showClassStudents = async function(classId, selectedMonth = null, viewMod
                                 </div>
                             </div>
                             
-                            <h6 class="  mb-3">حالة المدفوعات:</h6>
+                            <h6 class="text-muted mb-3">حالة المدفوعات:</h6>
                             
                             ${studentPayments.length > 0 ? `
                                 <div class="table-responsive">
@@ -5565,7 +5567,7 @@ tableBody.innerHTML = '';
 if (filteredStudents.length === 0) {
     tableBody.innerHTML = `
         <tr>
-            <td colspan="7" class="text-center py-4  ">لا توجد نتائج مطابقة للبحث</td>
+            <td colspan="7" class="text-center py-4 text-muted">لا توجد نتائج مطابقة للبحث</td>
         </tr>
     `;
     return;
@@ -5676,7 +5678,7 @@ tableBody.innerHTML = '';
 if (filteredPayments.length === 0) {
     tableBody.innerHTML = `
         <tr>
-            <td colspan="8" class="text-center py-4  ">لا توجد نتائج مطابقة للبحث</td>
+            <td colspan="8" class="text-center py-4 text-muted">لا توجد نتائج مطابقة للبحث</td>
         </tr>
     `;
     return;
@@ -5902,7 +5904,7 @@ tableBody.innerHTML = '';
 if (filteredCards.length === 0) {
     tableBody.innerHTML = `
         <tr>
-            <td colspan="5" class="text-center py-4  ">لا توجد نتائج مطابقة للبحث</td>
+            <td colspan="5" class="text-center py-4 text-muted">لا توجد نتائج مطابقة للبحث</td>
         </tr>
     `;
     return;
@@ -6010,7 +6012,7 @@ tableBody.innerHTML = '';
 if (students.length === 0) {
 tableBody.innerHTML = `
     <tr>
-        <td colspan="9" class="text-center py-4  ">لا توجد طلبات متاحة</td>
+        <td colspan="9" class="text-center py-4 text-muted">لا توجد طلبات متاحة</td>
     </tr>
 `;
 return;
@@ -6383,7 +6385,7 @@ Swal.fire({
             <p><strong>اسم المستخدم:</strong> ${result.username}</p>
             <p><strong>كلمة المرور:</strong> ${password}</p>
         </div>
-        <p class="  mt-2">يرجى تدوين هذه المعلومات وإعطائها للطالب</p>
+        <p class="text-muted mt-2">يرجى تدوين هذه المعلومات وإعطائها للطالب</p>
     `,
     confirmButtonText: 'تم',
     width: '600px'
@@ -6433,7 +6435,7 @@ function renderStudentAccountsTable(accounts) {
     if (accounts.length === 0) {
     tableBody.innerHTML = `
         <tr>
-        <td colspan="8" class="text-center py-4  ">لا توجد حسابات متاحة</td>
+        <td colspan="8" class="text-center py-4 text-muted">لا توجد حسابات متاحة</td>
         </tr>
     `;
     return;
@@ -6827,7 +6829,7 @@ function renderStudentAccountsTable(accounts) {
     if (!accounts || accounts.length === 0) {
         tableBody.innerHTML = `
             <tr>
-                <td colspan="7" class="text-center py-4  ">لا توجد حسابات متاحة</td>
+                <td colspan="7" class="text-center py-4 text-muted">لا توجد حسابات متاحة</td>
             </tr>
         `;
         return;
@@ -6871,7 +6873,7 @@ function renderStudentAccountsTable(accounts) {
     if (accounts.length === 0) {
     tableBody.innerHTML = `
         <tr>
-        <td colspan="7" class="text-center py-4  ">لا توجد حسابات متاحة</td>
+        <td colspan="7" class="text-center py-4 text-muted">لا توجد حسابات متاحة</td>
         </tr>
     `;
     return;
@@ -7425,7 +7427,7 @@ document.getElementById('disconnectRFIDBtn').addEventListener('click', function(
     rfidStatus.className = 'badge bg-danger disconnected';
     document.getElementById('connectRFIDBtn').disabled = false;
     document.getElementById('disconnectRFIDBtn').disabled = true;
-    document.getElementById('rfid-result').innerHTML = '<p class=" ">قم بتمرير بطاقة الطالب لعرض المعلومات</p>';
+    document.getElementById('rfid-result').innerHTML = '<p class="text-muted">قم بتمرير بطاقة الطالب لعرض المعلومات</p>';
 });
 function showAllClasses() {
     document.getElementById('classSearchInput').value = '';
@@ -7485,7 +7487,7 @@ function updateClassesTable(classes) {
     if (classes.length === 0) {
         tableBody.innerHTML = `
             <tr>
-                <td colspan="7" class="text-center py-4  ">لا توجد نتائج مطابقة للبحث</td>
+                <td colspan="7" class="text-center py-4 text-muted">لا توجد نتائج مطابقة للبحث</td>
             </tr>
         `;
         return;
@@ -7516,6 +7518,7 @@ function updateClassesTable(classes) {
     });
     
     document.getElementById('classesCount').textContent = classes.length;
+    document.getElementById('lNum').textContent = classes.length;
 }
 
 
@@ -7683,6 +7686,7 @@ async function updateDashboardCounters() {
             const unpaidRegistration = students.filter(s => !s.hasPaidRegistration).length;
             
             document.getElementById('studentsCount').textContent = totalStudents;
+            document.getElementById('stNum').textContent = totalStudents;
             
             // إضافة عنصر جديد لعرض الطلاب الذين لم يدفعوا
             let unpaidElement = document.getElementById('unpaidRegistrationCount');
@@ -9179,7 +9183,7 @@ function createGateInterface() {
                 <div class="row mt-4">
                     <div class="col-12">
                         <div id="gate-rfid-result">
-                            <p class="  text-center">سيظهر هنا نتيجة مسح البطاقة</p>
+                            <p class="text-muted text-center">سيظهر هنا نتيجة مسح البطاقة</p>
                         </div>
                     </div>
                 </div>
@@ -9255,7 +9259,7 @@ async function loadCurrentClassInfo() {
                 <p>الوقت: ${liveClass.startTime}</p>
             `;
         } else {
-            classDetails.innerHTML = '<p class=" ">لا توجد حصص جارية حالياً</p>';
+            classDetails.innerHTML = '<p class="text-muted">لا توجد حصص جارية حالياً</p>';
         }
     } catch (err) {
         console.error('Error loading current class info:', err);
@@ -9327,7 +9331,7 @@ function showStudentDetailModal(student, cardUid) {
                         <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=3498db&color=fff" 
                             class="student-avatar rounded-circle mb-3" alt="صورة الطالب">
                         <h4>${student.name}</h4>
-                        <p class=" ">${student.studentId}</p>
+                        <p class="text-muted">${student.studentId}</p>
                         <div class="d-grid gap-2">
                             <button class="btn btn-success" onclick="handleQuickPayment('${student._id}')">
                                 <i class="bi bi-cash-coin me-1"></i> دفع حصة
@@ -9411,7 +9415,7 @@ function showStudentDetailModal(student, cardUid) {
 }
 function renderStudentClasses(classes) {
     if (!classes || classes.length === 0) {
-        return '<p class="  text-center">لا توجد حصص مسجلة</p>';
+        return '<p class="text-muted text-center">لا توجد حصص مسجلة</p>';
     }
 
     // عرض أول 3 حصص فقط
@@ -9425,7 +9429,7 @@ function renderStudentClasses(classes) {
                     <strong>${cls.name}</strong>
                     <span class="badge bg-info">${cls.subject}</span>
                 </div>
-                <small class=" ">${getAcademicYearName(cls.academicYear)}</small>
+                <small class="text-muted">${getAcademicYearName(cls.academicYear)}</small>
             </div>
         `;
     });
@@ -9704,7 +9708,7 @@ function updateClassesList(classes) {
     classesList.innerHTML = '';
     
     if (classes.length === 0) {
-        classesList.innerHTML = '<p class=" ">لا توجد حصص مسجلة</p>';
+        classesList.innerHTML = '<p class="text-muted">لا توجد حصص مسجلة</p>';
         return;
     }
     
@@ -11091,7 +11095,7 @@ function renderTransactionsTable(transactions) {
     if (transactions.length === 0) {
     tableBody.innerHTML = `
         <tr>
-        <td colspan="7" class="text-center py-4  ">لا توجد معاملات مسجلة</td>
+        <td colspan="7" class="text-center py-4 text-muted">لا توجد معاملات مسجلة</td>
         </tr>
     `;
     return;
