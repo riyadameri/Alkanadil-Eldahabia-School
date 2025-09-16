@@ -3404,6 +3404,77 @@ app.put('/api/payments/:id/amount', async (req, res) => {
     }
   });
 
+  // إضافة نقطة النهاية المطلوبة
+app.get('/api/accounting/teacher-commissions/:id', authenticate(['admin', 'accountant']), async (req, res) => {
+  try {
+    const commission = await TeacherCommission.findById(req.params.id)
+      .populate('teacher')
+      .populate('student')
+      .populate('class')
+      .populate('recordedBy');
+
+    if (!commission) {
+      return res.status(404).json({ error: 'العمولة غير موجودة' });
+    }
+
+    res.json(commission);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// إضافة نقطة نهاية لدفع عمولة محددة
+app.post('/api/accounting/teacher-commissions/:id/pay', authenticate(['admin', 'accountant']), async (req, res) => {
+  try {
+    const { paymentMethod, paymentDate } = req.body;
+    
+    const commission = await TeacherCommission.findById(req.params.id)
+      .populate('teacher')
+      .populate('student')
+      .populate('class');
+
+    if (!commission) {
+      return res.status(404).json({ error: 'العمولة غير موجودة' });
+    }
+
+    if (commission.status === 'paid') {
+      return res.status(400).json({ error: 'تم دفع العمولة مسبقاً' });
+    }
+
+    commission.status = 'paid';
+    commission.paymentDate = paymentDate || new Date();
+    commission.paymentMethod = paymentMethod || 'cash';
+    commission.recordedBy = req.user.id;
+
+    await commission.save();
+
+    // تسجيل المعاملة المالية (مصروف)
+    const expense = new Expense({
+      description: `عمولة الأستاذ ${commission.teacher.name} عن الطالب ${commission.student.name} لشهر ${commission.month}`,
+      amount: commission.amount,
+      category: 'salary',
+      type: 'teacher_payment',
+      recipient: {
+        type: 'teacher',
+        id: commission.teacher._id,
+        name: commission.teacher.name
+      },
+      paymentMethod: commission.paymentMethod,
+      status: 'paid',
+      recordedBy: req.user.id
+    });
+
+    await expense.save();
+
+    res.json({
+      message: 'تم دفع العمولة بنجاح',
+      commission
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
   // Employee Management Routes
   // Get all staff members (employees)
   app.get('/api/employees', async (req, res) => {
