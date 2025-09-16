@@ -3429,7 +3429,7 @@ window.showClassStudents = async function(classId, selectedMonth = null, viewMod
                             </div>
                             
                             <div class="mt-3 text-center">
-                                <p class="text-muted">إجمالي عدد الطلاب: <strong>${activeStudents.length}</strong></p>
+                                <p class=" ">إجمالي عدد الطلاب: <strong>${activeStudents.length}</strong></p>
                             </div>
                         </div>
                     </div>
@@ -3532,7 +3532,7 @@ window.showClassStudents = async function(classId, selectedMonth = null, viewMod
                     return `
                     <div class="student-item card mb-4 shadow-sm" style="animation-delay: ${index * 0.1}s">
                         <div class="card-header d-flex justify-content-between align-items-center">
-                            <h5 class="mb-0">${student.name} <small class="text-muted">(${student.studentId})</small></h5>
+                            <h5 class="mb-0">${student.name} <small class=" ">(${student.studentId})</small></h5>
                             <div>
                                 <span class="badge ${totalPending === 0 ? 'bg-success' : 'bg-warning'} me-2">
                                     ${totalPending === 0 ? 'مسدد بالكامل' : `متأخر: ${totalPending} د.ك`}
@@ -3559,7 +3559,7 @@ window.showClassStudents = async function(classId, selectedMonth = null, viewMod
                                 </div>
                             </div>
                             
-                            <h6 class="text-muted mb-3">حالة المدفوعات:</h6>
+                            <h6 class="  mb-3">حالة المدفوعات:</h6>
                             
                             ${studentPayments.length > 0 ? `
                                 <div class="table-responsive">
@@ -5565,7 +5565,7 @@ tableBody.innerHTML = '';
 if (filteredStudents.length === 0) {
     tableBody.innerHTML = `
         <tr>
-            <td colspan="7" class="text-center py-4 text-muted">لا توجد نتائج مطابقة للبحث</td>
+            <td colspan="7" class="text-center py-4  ">لا توجد نتائج مطابقة للبحث</td>
         </tr>
     `;
     return;
@@ -5676,7 +5676,7 @@ tableBody.innerHTML = '';
 if (filteredPayments.length === 0) {
     tableBody.innerHTML = `
         <tr>
-            <td colspan="8" class="text-center py-4 text-muted">لا توجد نتائج مطابقة للبحث</td>
+            <td colspan="8" class="text-center py-4  ">لا توجد نتائج مطابقة للبحث</td>
         </tr>
     `;
     return;
@@ -5902,7 +5902,7 @@ tableBody.innerHTML = '';
 if (filteredCards.length === 0) {
     tableBody.innerHTML = `
         <tr>
-            <td colspan="5" class="text-center py-4 text-muted">لا توجد نتائج مطابقة للبحث</td>
+            <td colspan="5" class="text-center py-4  ">لا توجد نتائج مطابقة للبحث</td>
         </tr>
     `;
     return;
@@ -6010,7 +6010,7 @@ tableBody.innerHTML = '';
 if (students.length === 0) {
 tableBody.innerHTML = `
     <tr>
-        <td colspan="9" class="text-center py-4 text-muted">لا توجد طلبات متاحة</td>
+        <td colspan="9" class="text-center py-4  ">لا توجد طلبات متاحة</td>
     </tr>
 `;
 return;
@@ -6383,7 +6383,7 @@ Swal.fire({
             <p><strong>اسم المستخدم:</strong> ${result.username}</p>
             <p><strong>كلمة المرور:</strong> ${password}</p>
         </div>
-        <p class="text-muted mt-2">يرجى تدوين هذه المعلومات وإعطائها للطالب</p>
+        <p class="  mt-2">يرجى تدوين هذه المعلومات وإعطائها للطالب</p>
     `,
     confirmButtonText: 'تم',
     width: '600px'
@@ -6433,7 +6433,7 @@ function renderStudentAccountsTable(accounts) {
     if (accounts.length === 0) {
     tableBody.innerHTML = `
         <tr>
-        <td colspan="8" class="text-center py-4 text-muted">لا توجد حسابات متاحة</td>
+        <td colspan="8" class="text-center py-4  ">لا توجد حسابات متاحة</td>
         </tr>
     `;
     return;
@@ -6827,7 +6827,7 @@ function renderStudentAccountsTable(accounts) {
     if (!accounts || accounts.length === 0) {
         tableBody.innerHTML = `
             <tr>
-                <td colspan="7" class="text-center py-4 text-muted">لا توجد حسابات متاحة</td>
+                <td colspan="7" class="text-center py-4  ">لا توجد حسابات متاحة</td>
             </tr>
         `;
         return;
@@ -6871,7 +6871,7 @@ function renderStudentAccountsTable(accounts) {
     if (accounts.length === 0) {
     tableBody.innerHTML = `
         <tr>
-        <td colspan="7" class="text-center py-4 text-muted">لا توجد حسابات متاحة</td>
+        <td colspan="7" class="text-center py-4  ">لا توجد حسابات متاحة</td>
         </tr>
     `;
     return;
@@ -7425,7 +7425,7 @@ document.getElementById('disconnectRFIDBtn').addEventListener('click', function(
     rfidStatus.className = 'badge bg-danger disconnected';
     document.getElementById('connectRFIDBtn').disabled = false;
     document.getElementById('disconnectRFIDBtn').disabled = true;
-    document.getElementById('rfid-result').innerHTML = '<p class="text-muted">قم بتمرير بطاقة الطالب لعرض المعلومات</p>';
+    document.getElementById('rfid-result').innerHTML = '<p class=" ">قم بتمرير بطاقة الطالب لعرض المعلومات</p>';
 });
 function showAllClasses() {
     document.getElementById('classSearchInput').value = '';
@@ -7485,7 +7485,7 @@ function updateClassesTable(classes) {
     if (classes.length === 0) {
         tableBody.innerHTML = `
             <tr>
-                <td colspan="7" class="text-center py-4 text-muted">لا توجد نتائج مطابقة للبحث</td>
+                <td colspan="7" class="text-center py-4  ">لا توجد نتائج مطابقة للبحث</td>
             </tr>
         `;
         return;
@@ -9179,7 +9179,7 @@ function createGateInterface() {
                 <div class="row mt-4">
                     <div class="col-12">
                         <div id="gate-rfid-result">
-                            <p class="text-muted text-center">سيظهر هنا نتيجة مسح البطاقة</p>
+                            <p class="  text-center">سيظهر هنا نتيجة مسح البطاقة</p>
                         </div>
                     </div>
                 </div>
@@ -9255,7 +9255,7 @@ async function loadCurrentClassInfo() {
                 <p>الوقت: ${liveClass.startTime}</p>
             `;
         } else {
-            classDetails.innerHTML = '<p class="text-muted">لا توجد حصص جارية حالياً</p>';
+            classDetails.innerHTML = '<p class=" ">لا توجد حصص جارية حالياً</p>';
         }
     } catch (err) {
         console.error('Error loading current class info:', err);
@@ -9276,116 +9276,326 @@ async function loadCurrentClassInfo() {
 
 async function displayStudentInfo(cardUid) {
     try {
-        // Determine which result container to use based on current section
-        let rfidResult;
-        if (document.getElementById('gate-interface').classList.contains('active')) {
-            rfidResult = document.getElementById('gate-rfid-result');
-        } else {
-            rfidResult = document.getElementById('rfid-result') || document.getElementById('studentInfo');
-        }
-
-        if (!rfidResult) {
-            console.error('No RFID result container found');
-            return;
-        }
-
-        // Show loading state
-        rfidResult.innerHTML = `
-            <div class="text-center">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">جاري المعالجة...</span>
-                </div>
-                <p>جاري التعرف على البطاقة: ${cardUid}</p>
-            </div>
-        `;
-
-        // Check if this is a known card
-        const response = await fetch(`/api/cards/uid/${cardUid}`, {
+        // جلب بيانات البطاقة والطالب
+        const cardResponse = await fetch(`/api/cards/uid/${cardUid}`, {
             headers: getAuthHeaders()
         });
 
-        if (response.status === 404) {
-            // Unknown card
-            rfidResult.innerHTML = `
-                <div class="alert alert-warning text-center">
-                    <h4>بطاقة غير معروفة</h4>
-                    <p>UID: ${cardUid}</p>
-                    <button class="btn btn-primary" onclick="showAssignCardModal('${cardUid}')">
-                        تعيين البطاقة لطالب
-                    </button>
-                </div>
-            `;
+        if (cardResponse.status === 404) {
+            // بطاقة غير معروفة
+            showUnknownCardUI(cardUid);
             return;
         }
 
-        if (response.status === 401) {
+        if (cardResponse.status === 401) {
             logout();
             return;
         }
 
-        const cardData = await response.json();
+        const cardData = await cardResponse.json();
         
         if (cardData.student) {
-            // Get complete student information
+            // جلب معلومات الطالب الكاملة
             const studentResponse = await fetch(`/api/students/${cardData.student._id}`, {
                 headers: getAuthHeaders()
             });
             
-            if (studentResponse.status === 401) {
-                logout();
-                return;
-            }
-            
-            const student = await studentResponse.json();
-            
-            // Show student info
-            rfidResult.innerHTML = `
-                <div class="alert alert-success">
-                    <div class="text-center mb-4">
-                        <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=3498db&color=fff" 
-                            class="student-photo rounded-circle mb-3" style="width: 80px; height: 80px;">
-                        <h3>${student.name}</h3>
-                        <p class="text-muted">رقم الطالب: ${student.studentId}</p>
-                    </div>
-                    
-                    <div class="row mb-4">
-                        <div class="col-md-6">
-                            <h5>معلومات الطالب</h5>
-                            <p><strong>ولي الأمر:</strong> ${student.parentName || 'غير محدد'}</p>
-                            <p><strong>هاتف ولي الأمر:</strong> ${student.parentPhone || 'غير محدد'}</p>
-                            <p><strong>الصف الدراسي:</strong> ${getAcademicYearName(student.academicYear) || 'غير محدد'}</p>
-                        </div>
-                    </div>
-                    
-                    <div class="d-grid gap-2">
-                        <button class="btn btn-primary" onclick="handleGateAttendance('${cardUid}')">
-                            <i class="bi bi-check-circle me-1"></i> تسجيل الحضور
-                        </button>
-                        <button class="btn btn-info" onclick="showStudentDetails('${student._id}')">
-                            <i class="bi bi-person-circle me-1"></i> عرض التفاصيل الكاملة
-                        </button>
-                    </div>
-                </div>
-            `;
-            
-            // Auto-process attendance if we're in gate mode
-            if (document.getElementById('gate-interface').classList.contains('active')) {
-                setTimeout(() => handleGateAttendance(cardUid), 1500);
+            if (studentResponse.ok) {
+                const student = await studentResponse.json();
+                
+                // عرض نافذة التفاصيل المتكاملة
+                showStudentDetailModal(student, cardUid);
             }
         }
     } catch (err) {
         console.error('Error processing RFID:', err);
-        const rfidResult = document.getElementById('rfid-result') || document.getElementById('gate-rfid-result');
-        if (rfidResult) {
-            rfidResult.innerHTML = `
-                <div class="alert alert-danger text-center">
-                    <h4>خطأ في المعالجة</h4>
-                    <p>حدث خطأ أثناء معالجة البطاقة</p>
-                </div>
-            `;
-        }
+        showErrorUI('حدث خطأ أثناء معالجة البطاقة');
     }
 }
+
+function showStudentDetailModal(student, cardUid) {
+    // إنشاء محتوى النافذة
+    const modalContent = `
+        <div class="student-detail-modal">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">معلومات الطالب - ${student.name}</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-4 text-center">
+                        <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=3498db&color=fff" 
+                            class="student-avatar rounded-circle mb-3" alt="صورة الطالب">
+                        <h4>${student.name}</h4>
+                        <p class=" ">${student.studentId}</p>
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-success" onclick="handleQuickPayment('${student._id}')">
+                                <i class="bi bi-cash-coin me-1"></i> دفع حصة
+                            </button>
+                            <button class="btn btn-info" onclick="enrollInClass('${student._id}')">
+                                <i class="bi bi-book me-1"></i> التسجيل في حصة
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6>المعلومات الشخصية</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <p><strong>ولي الأمر:</strong> ${student.parentName || 'غير محدد'}</p>
+                                        <p><strong>هاتف ولي الأمر:</strong> ${student.parentPhone || 'غير محدد'}</p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <p><strong>الصف الدراسي:</strong> ${getAcademicYearName(student.academicYear) || 'غير محدد'}</p>
+                                        <p><strong>تاريخ التسجيل:</strong> ${new Date(student.registrationDate).toLocaleDateString('ar-EG')}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card mt-3">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0">الحصص المسجلة</h6>
+                                <button class="btn btn-sm btn-outline-primary" onclick="showAllClasses('${student._id}')">
+                                    عرض الكل
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                ${renderStudentClasses(student.classes)}
+                            </div>
+                        </div>
+
+                        <div class="card mt-3">
+                            <div class="card-header">
+                                <h6 class="mb-0">آخر المدفوعات</h6>
+                            </div>
+                            <div class="card-body">
+                                ${renderRecentPayments(student._id)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+                <button type="button" class="btn btn-primary" onclick="showFullStudentDetails('${student._id}')">
+                    عرض التفاصيل الكاملة
+                </button>
+            </div>
+        </div>
+    `;
+
+    // إنشاء وعرض المودال
+    const modalContainer = document.createElement('div');
+    modalContainer.innerHTML = `
+        <div class="modal fade" id="studentDetailModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                ${modalContent}
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modalContainer);
+    
+    // عرض المودال
+    const modal = new bootstrap.Modal(document.getElementById('studentDetailModal'));
+    modal.show();
+    
+    // تنظيف المودال بعد إغلاقه
+    document.getElementById('studentDetailModal').addEventListener('hidden.bs.modal', function () {
+        document.body.removeChild(modalContainer);
+    });
+}
+function renderStudentClasses(classes) {
+    if (!classes || classes.length === 0) {
+        return '<p class="  text-center">لا توجد حصص مسجلة</p>';
+    }
+
+    // عرض أول 3 حصص فقط
+    const displayedClasses = classes.slice(0, 3);
+    let html = '';
+
+    displayedClasses.forEach(cls => {
+        html += `
+            <div class="class-item mb-2 p-2 border rounded">
+                <div class="d-flex justify-content-between">
+                    <strong>${cls.name}</strong>
+                    <span class="badge bg-info">${cls.subject}</span>
+                </div>
+                <small class=" ">${getAcademicYearName(cls.academicYear)}</small>
+            </div>
+        `;
+    });
+
+    if (classes.length > 3) {
+        html += `<p class="text-center mt-2"><small>+${classes.length - 3} حصص أخرى</small></p>`;
+    }
+
+    return html;
+}
+
+async function handleQuickPayment(studentId) {
+    try {
+        // جلب الحصص المتاحة للطالب
+        const classesResponse = await fetch(`/api/students/${studentId}/classes`, {
+            headers: getAuthHeaders()
+        });
+
+        if (classesResponse.ok) {
+            const classes = await classesResponse.json();
+            
+            // إنشاء قائمة الحصص للاختيار
+            const options = classes.map(cls => 
+                `<option value="${cls._id}">${cls.name} - ${cls.price} د.ج</option>`
+            ).join('');
+
+            const { value: formValues } = await Swal.fire({
+                title: 'دفع حصة',
+                html: `
+                    <select id="paymentClass" class="form-select mb-3">
+                        <option value="">اختر الحصة</option>
+                        ${options}
+                    </select>
+                    <select id="paymentMonth" class="form-select mb-3">
+                        <option value="">اختر الشهر</option>
+                        ${generateMonthOptions()}
+                    </select>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="printReceipt" checked>
+                        <label class="form-check-label" for="printReceipt">
+                            طباعة الإيصال
+                        </label>
+                    </div>
+                `,
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonText: 'دفع',
+                cancelButtonText: 'إلغاء',
+                preConfirm: () => {
+                    return {
+                        classId: document.getElementById('paymentClass').value,
+                        month: document.getElementById('paymentMonth').value,
+                        printReceipt: document.getElementById('printReceipt').checked
+                    };
+                }
+            });
+
+            if (formValues) {
+                // إجراء عملية الدفع
+                const paymentResponse = await fetch('/api/payments', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...getAuthHeaders()
+                    },
+                    body: JSON.stringify({
+                        student: studentId,
+                        class: formValues.classId,
+                        month: formValues.month,
+                        amount: await getClassPrice(formValues.classId),
+                        paymentMethod: 'cash',
+                        paymentDate: new Date().toISOString().split('T')[0]
+                    })
+                });
+
+                if (paymentResponse.ok) {
+                    const payment = await paymentResponse.json();
+                    
+                    // طباعة الإيصال إذا طلب المستخدم
+                    if (formValues.printReceipt) {
+                        await printPaymentReceipt(payment);
+                    }
+
+                    Swal.fire('نجاح', 'تم دفع الحصة بنجاح', 'success');
+                } else {
+                    throw new Error('فشل في عملية الدفع');
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Error processing quick payment:', err);
+        Swal.fire('خطأ', err.message || 'حدث خطأ أثناء عملية الدفع', 'error');
+    }
+}
+async function enrollInClass(studentId) {
+    try {
+        // جلب الحصص المتاحة
+        const classesResponse = await fetch('/api/classes/available', {
+            headers: getAuthHeaders()
+        });
+
+        if (classesResponse.ok) {
+            const classes = await classesResponse.json();
+            
+            const { value: classId } = await Swal.fire({
+                title: 'التسجيل في حصة',
+                input: 'select',
+                inputOptions: classes.reduce((options, cls) => {
+                    options[cls._id] = `${cls.name} (${cls.subject}) - ${cls.price} د.ج`;
+                    return options;
+                }, {}),
+                inputPlaceholder: 'اختر الحصة',
+                showCancelButton: true,
+                confirmButtonText: 'تسجيل',
+                cancelButtonText: 'إلغاء'
+            });
+
+            if (classId) {
+                // تسجيل الطالب في الحصة
+                const enrollResponse = await fetch(`/api/classes/${classId}/enroll/${studentId}`, {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
+
+                if (enrollResponse.ok) {
+                    Swal.fire('نجاح', 'تم تسجيل الطالب في الحصة بنجاح', 'success');
+                } else {
+                    throw new Error('فشل في التسجيل');
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Error enrolling student:', err);
+        Swal.fire('خطأ', err.message || 'حدث خطأ أثناء التسجيل', 'error');
+    }
+}
+async function getClassPrice(classId) {
+    const response = await fetch(`/api/classes/${classId}`, {
+        headers: getAuthHeaders()
+    });
+    
+    if (response.ok) {
+        const classData = await response.json();
+        return classData.price;
+    }
+    
+    return 0;
+}
+
+function generateMonthOptions() {
+    const months = [
+        'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+        'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
+    ];
+    
+    const currentYear = new Date().getFullYear();
+    let options = '';
+    
+    for (let i = 0; i < 12; i++) {
+        const monthIndex = (new Date().getMonth() + i) % 12;
+        const year = currentYear + Math.floor((new Date().getMonth() + i) / 12);
+        const value = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
+        const text = `${months[monthIndex]} ${year}`;
+        
+        options += `<option value="${value}">${text}</option>`;
+    }
+    
+    return options;
+}
+
 
 // دالة لمعالجة مسح البطاقة
 document.getElementById('cardInput').addEventListener('input', function(e) {
@@ -9494,7 +9704,7 @@ function updateClassesList(classes) {
     classesList.innerHTML = '';
     
     if (classes.length === 0) {
-        classesList.innerHTML = '<p class="text-muted">لا توجد حصص مسجلة</p>';
+        classesList.innerHTML = '<p class=" ">لا توجد حصص مسجلة</p>';
         return;
     }
     
@@ -9728,7 +9938,7 @@ async function processGlobalRFIDInput(cardUid) {
                     <span class="visually-hidden">جاري المعالجة...</span>
                 </div>
                 <p>جاري التعرف على البطاقة: ${cardUid}</p>
-                <small class="text-muted">نوع القارئ: ${readerType === 'new_reader' ? 'الجديد' : 'القديم'}</small>
+                <small class="">نوع القارئ: ${readerType === 'new_reader' ? 'الجديد' : 'القديم'}</small>
             </div>
         `;
 
@@ -10418,8 +10628,8 @@ function showRecentScans() {
 function clearGateResults() {
     document.getElementById('gateRfidResult').innerHTML = `
         <div class="gate-placeholder">
-            <i class="bi bi-credit-card-2-front text-muted" style="font-size: 3rem;"></i>
-            <p class="text-muted mt-2">سيظهر هنا معلومات الطالب بعد مسح البطاقة</p>
+            <i class="bi bi-credit-card-2-front " style="font-size: 3rem;"></i>
+            <p class=" mt-2">سيظهر هنا معلومات الطالب بعد مسح البطاقة</p>
         </div>
     `;
 }
@@ -10881,7 +11091,7 @@ function renderTransactionsTable(transactions) {
     if (transactions.length === 0) {
     tableBody.innerHTML = `
         <tr>
-        <td colspan="7" class="text-center py-4 text-muted">لا توجد معاملات مسجلة</td>
+        <td colspan="7" class="text-center py-4  ">لا توجد معاملات مسجلة</td>
         </tr>
     `;
     return;
