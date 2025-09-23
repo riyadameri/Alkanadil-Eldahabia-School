@@ -1287,32 +1287,31 @@ function showStudentModal(student) {
 // في قسم loadStudents()، تحديث الصفوف لتشمل زر عرض التفاصيل
 async function loadStudents() {
     try {
-      const response = await fetch('/api/students', {
-        headers: getAuthHeaders()
-      });
-      
-      if (response.status === 401) {
-        logout();
-        return;
-      }
-      
-      const students = await response.json();
-      
-      const tableBody = document.getElementById('studentsTable');
-      tableBody.innerHTML = '';
-      
-      students.forEach((student, index) => {
-        const row = document.createElement('tr');
-        row.dataset.studentId = student._id; // إضافة معرف الطالب
+        const response = await fetch('/api/students', {
+            headers: getAuthHeaders()
+        });
         
-        // إضافة صنف تحذيري للطلاب الذين لم يدفعوا حقوق التسجيل
-        if (!student.hasPaidRegistration) {
-          row.classList.add('table-warning');
-          row.title = 'لم يدفع حقوق التسجيل';
-        } else {
-          row.classList.add('table-success');
+        if (response.status === 401) {
+            logout();
+            return;
         }
-  
+        
+        const students = await response.json();
+        
+        const tableBody = document.getElementById('studentsTable');
+        tableBody.innerHTML = '';
+        
+        students.forEach((student, index) => {
+            const row = document.createElement('tr');
+            row.dataset.studentId = student._id;
+
+            if (!student.hasPaidRegistration) {
+                row.classList.add('table-warning');
+                row.title = 'لم يدفع حقوق التسجيل';
+            } else {
+                row.classList.add('table-success');
+            }
+
             row.style.cursor = 'pointer';
             row.addEventListener('click', () => {
                 showStudentModal(student);
@@ -1347,7 +1346,7 @@ async function loadStudents() {
         });
         
         document.getElementById('studentsCount').textContent = students.length;
-            updateDashboardCounters();
+        updateDashboardCounters();
 
     } catch (err) {
         console.error('Error loading students:', err);
