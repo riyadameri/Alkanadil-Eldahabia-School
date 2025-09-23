@@ -3352,7 +3352,10 @@ app.put('/api/payments/:id/amount', async (req, res) => {
   app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
   });
-
+  app.get('cards-auth',(req,res)=>{
+    res.sendFile(path.join(__dirname, 'public', 'cards-auth.html'));
+  })
+  
 
   // Admin dashboard
   app.get('/admin', authenticate(['admin','student', 'secretary', 'admin','accountant']), (req, res) => {

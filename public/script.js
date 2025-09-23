@@ -5620,7 +5620,6 @@ async function searchStudents() {
         
     } catch (err) {
         console.error('Error searching students:', err);
-        Swal.fire('خطأ', 'حدث خطأ أثناء البحث', 'error');
     }
 }
 
