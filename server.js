@@ -924,6 +924,34 @@ const validateObjectId = (req, res, next) => {
 
   app.post('/api/students', authenticate(['admin', 'secretary']), async (req, res) => {
     try {
+      const { name, parentPhone, studentId } = req.body;
+      
+      // التحقق من وجود طالب بنفس الاسم ورقم هاتف ولي الأمر
+      const existingStudent = await Student.findOne({
+        name,
+        parentPhone
+      });
+  
+      // أو التحقق من وجود طالب بنفس المعرف إذا تم تقديمه
+      if (studentId) {
+        const existingById = await Student.findOne({ studentId });
+        if (existingById) {
+          return res.status(200).json({ 
+            message: "تم تحديث المعلومات بنجاح",
+            student: existingById,
+            existed: true
+          });
+        }
+      }
+  
+      if (existingStudent) {
+        return res.status(200).json({ 
+          message: "تم تحديث المعلومات بنجاح",
+          student: existingStudent,
+          existed: true
+        });
+      }
+  
       const student = new Student(req.body);
       await student.save();
       
@@ -931,12 +959,11 @@ const validateObjectId = (req, res, next) => {
       if (req.body.active !== false) {
         const schoolFee = new SchoolFee({
           student: student._id,
-          amount: req.body.registrationFee || 600, // 600 DZD قيمة افتراضية
+          amount: req.body.registrationFee || 600,
           status: 'pending'
         });
         await schoolFee.save();
         
-        // تسجيل المعاملة المالية (إيراد متوقع) - الإصلاح هنا
         const transaction = new FinancialTransaction({
           type: 'income',
           amount: schoolFee.amount,
@@ -948,12 +975,16 @@ const validateObjectId = (req, res, next) => {
         await transaction.save();
       }
       
-      res.status(201).json(student);
+      res.status(201).json({
+        message: "تم إنشاء الطالب بنجاح",
+        student,
+        existed: false
+      });
     } catch (err) {
       res.status(400).json({ error: err.message });
     }
   });
-
+  
   app.get('/api/accounting/budgets', authenticate(['admin', 'accountant']), async (req, res) => {
     try {
       const { status, category } = req.query;
@@ -1566,17 +1597,38 @@ app.get('/api/accounting/reports/financial', authenticate(['admin', 'accountant'
 
   app.post('/api/teachers', authenticate(['admin']), async (req, res) => {
     try {
-      const teacher = new Teacher(req.body);
-      const teacherExists = await Teacher.findOne({ name: req.body.name });
-      if (teacherExists) {
-        return res.status(200).json({ message: "تم التحيث" });
+      const { name, phone, email } = req.body;
+      
+      // التحقق من وجود أستاذ بنفس الاسم أو الهاتف أو البريد الإلكتروني
+      const existingTeacher = await Teacher.findOne({
+        $or: [
+          { name },
+          { phone },
+          { email }
+        ]
+      });
+  
+      if (existingTeacher) {
+        return res.status(200).json({ 
+          message: "تم تحديث المعلومات بنجاح",
+          teacher: existingTeacher,
+          existed: true
+        });
       }
+  
+      const teacher = new Teacher(req.body);
       await teacher.save();
-      res.status(201).json(teacher);
+      
+      res.status(201).json({
+        message: "تم إنشاء الأستاذ بنجاح",
+        teacher,
+        existed: false
+      });
     } catch (err) {
       res.status(400).json({ error: err.message });
     }
   });
+  
 
   app.get('/api/teachers/:id', authenticate(['admin', 'secretary']), async (req, res) => {
     try {
@@ -1660,14 +1712,32 @@ app.get('/api/accounting/reports/financial', authenticate(['admin', 'accountant'
 
   app.post('/api/classes', authenticate(['admin', 'secretary']), async (req, res) => {
     try {
-      const classObj = new Class(req.body);
-      // chek if calss exist by name and subject and teacher
-      const classExists = await Class.findOne({ name: req.body.name, subject: req.body.subject, teacher: req.body.teacher });
-      if (classExists) {
-        return res.status(200).json({ message: "تم التحيث" });
+      const { name, subject, teacher, academicYear } = req.body;
+      
+      // التحقق من وجود حصة بنفس الاسم والمادة والأستاذ والسنة الدراسية
+      const existingClass = await Class.findOne({
+        name,
+        subject,
+        teacher,
+        academicYear
+      });
+  
+      if (existingClass) {
+        return res.status(200).json({ 
+          message: "تم تحديث المعلومات بنجاح",
+          class: existingClass,
+          existed: true
+        });
       }
+  
+      const classObj = new Class(req.body);
       await classObj.save();
-      res.status(201).json(classObj);
+      
+      res.status(201).json({
+        message: "تم إنشاء الحصة بنجاح",
+        class: classObj,
+        existed: false
+      });
     } catch (err) {
       res.status(400).json({ error: err.message });
     }
