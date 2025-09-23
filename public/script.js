@@ -5533,100 +5533,98 @@ this.innerHTML = document.body.getAttribute('data-theme') === 'dark' ?
 });
 // Fixed searchStudents function
 async function searchStudents() {
-const searchTerm = document.getElementById('studentSearchInput').value.trim().toLowerCase();
-try {
-const response = await fetch('/api/students', {
-    headers: getAuthHeaders()
-});
-
-if (response.status === 401) {
-    logout();
-    return;
-}
-
-const students = await response.json();
-
-// Filter students based on search term
-const filteredStudents = students.filter(student => {
-    // If search term is empty, show all students
-    if (!searchTerm) return true;
+    const searchTerm = document.getElementById('studentSearchInput').value.trim().toLowerCase();
     
-    // Check if search term matches any student property
-    return (
-        (student.name && student.name.toLowerCase().includes(searchTerm)) ||
-        (student.studentId && student.studentId.toLowerCase().includes(searchTerm)) ||
-        (student.parentName && student.parentName.toLowerCase().includes(searchTerm)) ||
-        (student.academicYear && getAcademicYearName(student.academicYear).toLowerCase().includes(searchTerm))
-    );
-});
+    try {
+        const response = await fetch('/api/students', {
+            headers: getAuthHeaders()
+        });
 
-// Update the table with filtered results
-const tableBody = document.getElementById('studentsTable');
-tableBody.innerHTML = '';
+        if (response.status === 401) {
+            logout();
+            return;
+        }
 
-if (filteredStudents.length === 0) {
-    tableBody.innerHTML = `
-        <tr>
-            <td colspan="7" class="text-center py-4 text-muted">لا توجد نتائج مطابقة للبحث</td>
-        </tr>
-    `;
-    return;
-}
+        const students = await response.json();
 
-filteredStudents.forEach((student, index) => {
-    const row = document.createElement('tr');
-// Modify your student table row to include the create account button
-// Inside your loadStudents() function, update the action buttons:
-// Modify your student table row to include the create account button
-// Inside your loadStudents() function, update the action buttons:
-// In your loadStudents() function, modify the table row to show account status
-// In your loadStudents() function, modify the table row to show account status
-// In your loadStudents() function, modify the table row to show account status
-row.innerHTML = `
-<td>${index + 1}</td>
-<td>${student.name}</td>
-<td>${student.studentId}</td>
-<td>${student.parentName || '-'}</td>
-<td>${getAcademicYearName(student.academicYear) || '-'}</td>
-<td>${student.classes?.length || 0}</td>
-<td>
-${student.hasAccount ? 
-'<span class="badge bg-success">لديه حساب</span>' : 
-'<span class="badge bg-secondary">لا يوجد حساب</span>'}
-</td>
-<td>
-<button class="btn btn-sm btn-outline-primary btn-action" onclick="editStudent('${student._id}')">
-<i class="bi bi-pencil"></i>
-</button>
-<button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteStudent('${student._id}')">
-<i class="bi bi-trash"></i>
-</button>
-${!student.hasAccount ? `
-<button class="btn btn-sm btn-outline-info btn-action" onclick="showCreateAccountModal('${student._id}')">
-    <i class="bi bi-person-plus"></i> إنشاء حساب
-</button>
+        // Filter students based on search term
+        const filteredStudents = students.filter(student => {
+            // If search term is empty, show all students
+            if (!searchTerm) return true;
+            
+            // Check if search term matches any student property
+            return (
+                (student.name && student.name.toLowerCase().includes(searchTerm)) ||
+                (student.studentId && student.studentId.toLowerCase().includes(searchTerm)) ||
+                (student.parentName && student.parentName.toLowerCase().includes(searchTerm)) ||
+                (student.academicYear && getAcademicYearName(student.academicYear).toLowerCase().includes(searchTerm))
+            );
+        });
 
+        // Update the table with filtered results
+        const tableBody = document.getElementById('studentsTable');
+        tableBody.innerHTML = '';
 
-        <button class="btn btn-outline-primary" onclick="editStudent('${student._id}')"><i class="bi bi-pencil"></i> تعديل</button>
-        <button class="btn btn-outline-danger" onclick="deleteStudent('${student._id}')" ><i class="bi bi-trash"></i> حذف</button>
-        <button class="btn btn-outline-success" onclick="showEnrollModal('${student._id}')"><i class="bi bi-book"></i> تسجيل</button>
-        <button class="btn btn-outline-info" onclick="showAttendanceModal('${student._id}')" ><i class="bi bi-clock-history"></i> الحضور</button>
-        <button class="btn btn-outline-warning" onclick="printReceipt('${student._id}')" ><i class="bi bi-cash"></i> طباعة إيصال</button>
+        if (filteredStudents.length === 0) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="8" class="text-center py-4 text-muted">لا توجد نتائج مطابقة للبحث</td>
+                </tr>
+            `;
+            return;
+        }
 
+        filteredStudents.forEach((student, index) => {
+            const row = document.createElement('tr');
+            row.dataset.studentId = student._id;
+
+            // إضافة صنف تحذيري للطلاب الذين لم يدفعوا حقوق التسجيل
+            if (!student.hasPaidRegistration) {
+                row.classList.add('table-warning');
+                row.title = 'لم يدفع حقوق التسجيل';
+            } else {
+                row.classList.add('table-success');
+            }
+
+            row.style.cursor = 'pointer';
+            row.addEventListener('click', () => {
+                showStudentModal(student);
+            });
+            
+            row.innerHTML = `
+                <td>${index + 1}</td>
+                <td>${student.name}</td>
+                <td>${student.studentId}</td>
+                <td>${student.parentName || '-'}</td>
+                <td>${getAcademicYearName(student.academicYear) || '-'}</td>
+                <td>${student.classes?.length || 0}</td>
+                <td>
+                    ${!student.hasPaidRegistration ? 
+                        '<span class="badge bg-warning">لم يدفع التسجيل</span>' : 
+                        '<span class="badge bg-success">مسدد</span>'
+                    }
+                </td>
+                <td>
                     <button class="btn btn-sm btn-outline-primary btn-action" onclick="showStudentDetails('${student._id}', event)">
-                        <i class="bi bi-eye"></i> دقع الحصص
+                        <i class="bi bi-eye"></i> تفاصيل
                     </button>
+                    ${!student.hasPaidRegistration ? 
+                        `<button class="btn btn-sm btn-success btn-action ms-1" onclick="payRegistrationFee('${student._id}')">
+                            <i class="bi bi-cash"></i> دفع التسجيل
+                        </button>` : 
+                        ''
+                    }
+                </td>
+            `;
+            tableBody.appendChild(row);
+        });
+        
+    } catch (err) {
+        console.error('Error searching students:', err);
+        Swal.fire('خطأ', 'حدث خطأ أثناء البحث', 'error');
+    }
+}
 
-` : ''}
-</td>
-`;
-    tableBody.appendChild(row);
-});
-} catch (err) {
-console.error('Error searching students:', err);
-Swal.fire('خطأ', 'حدث خطأ أثناء البحث', 'error');
-}
-}
 async function searchPayments() {
 const searchTerm = document.getElementById('paymentSearchInput').value.trim().toLowerCase();
 try {
