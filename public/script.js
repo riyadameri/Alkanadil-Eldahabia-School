@@ -1,13 +1,7 @@
-let currentPayment = null;
 let currentClassId = null;
 let currentStudentId = null;
 let scheduleCounter = 1;
 const socket = io(window.location.origin); // Connects to current host
-
-
-
-
-
 
 
 // Initialize printer variables
@@ -7476,8 +7470,565 @@ async function searchClasses() {
         Swal.fire('خطأ', 'حدث خطأ أثناء البحث', 'error');
     }
 }
+
+
+// دالة لتحميل وعرض الغيابات الشهرية
+async function loadMonthlyAttendance(classId, month = null) {
+    try {
+        // إظهار تحميل
+        Swal.fire({
+            title: 'جاري التحميل',
+            html: 'جاري تحميل بيانات الغيابات الشهرية...',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        let url = `/api/classes/${classId}/monthly-attendance`;
+        if (month) {
+            url += `?month=${month}`;
+        }
+
+        const response = await fetch(url, {
+            headers: getAuthHeaders()
+        });
+
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+
+        if (!response.ok) {
+            throw new Error('فشل في جلب بيانات الغيابات');
+        }
+
+        const data = await response.json();
+        
+        // إغلاق نافذة التحميل
+        Swal.close();
+        
+        // عرض البيانات في واجهة المستخدم
+        displayMonthlyAttendance(data);
+        
+    } catch (error) {
+        console.error('Error loading monthly attendance:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'خطأ',
+            text: error.message || 'حدث خطأ أثناء تحميل بيانات الغيابات',
+            confirmButtonText: 'حسناً'
+        });
+    }
+}
+
+// دالة لعرض بيانات الغيابات الشهرية
+function displayMonthlyAttendance(data) {
+    const html = `
+        <div class="monthly-attendance-container">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="mb-1">تقرير الغيابات الشهرية</h5>
+                            <p class="mb-0">${data.class.name} - ${data.class.subject}</p>
+                            <p class="mb-0">شهر: ${data.class.month}</p>
+                        </div>
+                        <div class="text-end">
+                            <small>إجمالي الحصص: ${data.period.totalClasses}</small><br>
+                            <small>عدد الطلاب: ${data.summary.totalStudents}</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6>متوسط الحضور</h6>
+                                    <h3 class="text-primary">${data.summary.averageAttendance}%</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-9">
+                            <div class="month-selector">
+                                <label for="attendanceMonth" class="form-label">اختر شهر آخر:</label>
+                                <input type="month" id="attendanceMonth" class="form-control" 
+                                    onchange="changeAttendanceMonth('${data.class._id}', this.value)">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>#</th>
+                                    <th>اسم الطالب</th>
+                                    <th>رقم الطالب</th>
+                                    <th>الصف</th>
+                                    <th>الحضور</th>
+                                    <th>الغياب</th>
+                                    <th>التأخير</th>
+                                    <th>نسبة الحضور</th>
+                                    <th>الإجراءات</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.students.map((student, index) => `
+                                    <tr>
+                                        <td>${index + 1}</td>
+                                        <td>${student.student.name}</td>
+                                        <td>${student.student.studentId}</td>
+                                        <td>${getAcademicYearName(student.student.academicYear)}</td>
+                                        <td>
+                                            <span class="badge bg-success">${student.statistics.present}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-danger">${student.statistics.absent}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-warning">${student.statistics.late}</span>
+                                        </td>
+                                        <td>
+                                            <div class="progress" style="height: 20px;">
+                                                <div class="progress-bar ${student.statistics.attendanceRate >= 80 ? 'bg-success' : 
+                                                    student.statistics.attendanceRate >= 60 ? 'bg-warning' : 'bg-danger'}" 
+                                                    role="progressbar" 
+                                                    style="width: ${student.statistics.attendanceRate}%">
+                                                    ${student.statistics.attendanceRate}%
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-info" 
+                                                onclick="showStudentAttendanceDetails('${student.student._id}', '${data.class._id}', '${data.class.month}')">
+                                                <i class="bi bi-list-check"></i> التفاصيل
+                                            </button>
+                                            ${student.statistics.absent > 0 ? `
+                                                <button class="btn btn-sm btn-outline-warning mt-1" 
+                                                    onclick="contactParent('${student.student._id}')">
+                                                    <i class="bi bi-telephone"></i> إشعار ولي الأمر
+                                                </button>
+                                            ` : ''}
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="mt-4">
+                        <button class="btn btn-success" onclick="exportAttendanceToExcel('${data.class._id}', '${data.class.month}')">
+                            <i class="bi bi-file-earmark-excel"></i> تصدير إلى Excel
+                        </button>
+                        <button class="btn btn-primary ms-2" onclick="printAttendanceReport('${data.class._id}', '${data.class.month}')">
+                            <i class="bi bi-printer"></i> طباعة التقرير
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // عرض البيانات في نافذة
+    Swal.fire({
+        title: `تقرير الغيابات - ${data.class.name}`,
+        html: html,
+        width: '1300px',
+        showConfirmButton: false,
+        showCloseButton: true,
+        customClass: {
+            popup: 'attendance-report-popup'
+        }
+    });
+}
+
+// دالة لتغيير الشهر المعروض
+async function changeAttendanceMonth(classId, month) {
+    await loadMonthlyAttendance(classId, month);
+}
+
+// دالة لعرض تفاصيل حضور طالب معين
+async function showStudentAttendanceDetails(studentId, classId, month) {
+    try {
+        const response = await fetch(`/api/students/${studentId}/attendance?class=${classId}&month=${month}`, {
+            headers: getAuthHeaders()
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            displayStudentAttendanceDetails(data);
+        }
+    } catch (error) {
+        console.error('Error loading student attendance details:', error);
+    }
+}
+
+// دالة لعرض تفاصيل حضور الطالب
+function displayStudentAttendanceDetails(data) {
+    const html = `
+        <div class="student-attendance-details">
+            <h5>تفاصيل حضور الطالب: ${data.student.name}</h5>
+            <p>الفترة: ${data.period}</p>
+            
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>التاريخ</th>
+                            <th>اليوم</th>
+                            <th>الحصة</th>
+                            <th>الحالة</th>
+                            <th>ملاحظات</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.attendanceRecords.map(record => `
+                            <tr>
+                                <td>${new Date(record.date).toLocaleDateString('ar-EG')}</td>
+                                <td>${new Date(record.date).toLocaleDateString('ar-EG', { weekday: 'long' })}</td>
+                                <td>${record.classTime}</td>
+                                <td>
+                                    <span class="badge ${record.status === 'present' ? 'bg-success' : 
+                                        record.status === 'absent' ? 'bg-danger' : 'bg-warning'}">
+                                        ${record.status === 'present' ? 'حاضر' : 
+                                        record.status === 'absent' ? 'غائب' : 'متأخر'}
+                                    </span>
+                                </td>
+                                <td>${record.notes || '-'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+
+    Swal.fire({
+        title: 'تفاصيل الحضور',
+        html: html,
+        width: '800px',
+        confirmButtonText: 'إغلاق'
+    });
+}
+
+// دالة لإشعار ولي الأمر
+function contactParent(studentId) {
+    Swal.fire({
+        title: 'إشعار ولي الأمر',
+        html: `
+            <div class="parent-contact-form">
+                <p>سيتم إرسال إشعار لولي الأمر يتضمن تفاصيل غياب الطالب</p>
+                <div class="mb-3">
+                    <label for="messageType" class="form-label">نوع الرسالة:</label>
+                    <select id="messageType" class="form-select">
+                        <option value="warning">تنبيه بالغياب</option>
+                        <option value="info">معلومات عن الحضور</option>
+                        <option value="meeting">طلب مقابلة</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="customMessage" class="form-label">رسالة مخصصة (اختياري):</label>
+                    <textarea id="customMessage" class="form-control" rows="3" 
+                        placeholder="يمكنك إضافة رسالة مخصصة هنا..."></textarea>
+                </div>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'إرسال الإشعار',
+        cancelButtonText: 'إلغاء',
+        preConfirm: () => {
+            return {
+                messageType: document.getElementById('messageType').value,
+                customMessage: document.getElementById('customMessage').value
+            };
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // هنا يمكنك إضافة كود إرسال الإشعار
+            Swal.fire('تم الإرسال', 'تم إرسال الإشعار لولي الأمر بنجاح', 'success');
+        }
+    });
+}
+
+// دالة لتصدير البيانات إلى Excel
+async function exportAttendanceToExcel(classId, month) {
+    try {
+        const response = await fetch(`/api/classes/${classId}/monthly-attendance/export?month=${month}`, {
+            headers: getAuthHeaders()
+        });
+
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `غيابات_${classId}_${month}.xlsx`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+    } catch (error) {
+        console.error('Error exporting to Excel:', error);
+        Swal.fire('خطأ', 'فشل في تصدير البيانات', 'error');
+    }
+}
+
+// دالة لطباعة التقرير
+function printAttendanceReport(classId, month) {
+    const printWindow = window.open('', '_blank');
+    // هنا يمكنك إضافة كود لإنشاء صفحة طباعة مخصصة
+    printWindow.document.write('<h1>تقرير الغيابات الشهرية</h1>');
+    printWindow.print();
+}
+
+// إضافة زر لعرض الغيابات الشهرية في واجهة إدارة الحصص
+function addMonthlyAttendanceButton() {
+    // البحث عن أزرار إدارة الحصص وإضافة زر جديد
+    const classActionButtons = document.querySelectorAll('.btn-action');
+    
+    classActionButtons.forEach(button => {
+        if (button.innerHTML.includes('bi-people')) {
+            // إنشاء زر جديد للغيابات الشهرية
+            const attendanceButton = document.createElement('button');
+            attendanceButton.className = 'btn btn-sm btn-outline-warning btn-action ms-1';
+            attendanceButton.innerHTML = '<i class="bi bi-calendar-check"></i>';
+            attendanceButton.title = 'الغيابات الشهرية';
+            attendanceButton.onclick = function() {
+                const classId = this.closest('tr').dataset.classId;
+                loadMonthlyAttendance(classId);
+            };
+            
+            button.parentNode.appendChild(attendanceButton);
+        }
+    });
+}
+
+// استدعاء الدالة عند تحميل الصفحة
+document.addEventListener('DOMContentLoaded', function() {
+    addMonthlyAttendanceButton();
+});
+
+
+// دالة لإضافة زر الغيابات الشهرية في جدول الحصص
+function addAttendanceButtonsToClassesTable() {
+    const classesTable = document.getElementById('classesTable');
+    if (!classesTable) return;
+
+    const rows = classesTable.getElementsByTagName('tr');
+    
+    for (let i = 1; i < rows.length; i++) { // تخطي الصف الأول (العناوين)
+        const cells = rows[i].getElementsByTagName('td');
+        if (cells.length < 7) continue;
+
+        // البحث عن عمود الإجراءات (آخر عمود)
+        const actionsCell = cells[cells.length - 1];
+        
+        // التحقق من عدم وجود الزر مسبقاً
+        if (!actionsCell.querySelector('.btn-attendance')) {
+            // إنشاء زر الغيابات
+            const attendanceBtn = document.createElement('button');
+            attendanceBtn.className = 'btn btn-sm btn-outline-warning btn-attendance ms-1';
+            attendanceBtn.innerHTML = '<i class="bi bi-calendar-x"></i> غيابات الحصة';
+            attendanceBtn.title = 'عرض غيابات الحصة';
+            
+            // الحصول على معرف الحصة من الصف
+            const classId = rows[i].dataset.classId;
+            if (classId) {
+                attendanceBtn.onclick = () => showClassAttendance(classId);
+            }
+            
+            actionsCell.appendChild(attendanceBtn);
+        }
+    }
+}
+
+// دالة لعرض غيابات الحصة
+async function showClassAttendance(classId) {
+    try {
+        // إظهار تحميل
+        Swal.fire({
+            title: 'جاري التحميل',
+            html: 'جاري تحميل بيانات غيابات الحصة...',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        const response = await fetch(`/api/live-classes/class/${classId}/attendance`, {
+            headers: getAuthHeaders()
+        });
+
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: 'فشل في جلب البيانات' }));
+            throw new Error(errorData.error || 'فشل في جلب بيانات الغيابات');
+        }
+
+        const data = await response.json();
+        Swal.close();
+        
+        displayClassAttendance(data);
+        
+    } catch (error) {
+        console.error('Error loading class attendance:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'خطأ',
+            text: error.message || 'حدث خطأ أثناء تحميل بيانات الغيابات',
+            confirmButtonText: 'حسناً'
+        });
+    }
+}
+// دالة لعرض بيانات غيابات الحصة
+function displayClassAttendance(data) {
+    const html = `
+        <div class="class-attendance-container">
+            <div class="card shadow-sm">
+                <div class="card-header bg-warning text-dark">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="mb-1">تقرير غيابات الحصة</h5>
+                            <p class="mb-0">${data.class.name} - ${data.class.subject}</p>
+                            <p class="mb-0">الفترة: ${data.period}</p>
+                        </div>
+                        <div class="text-end">
+                            <small>إجمالي الحصص: ${data.summary.totalClasses}</small><br>
+                            <small>عدد الطلاب: ${data.summary.totalStudents}</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    ${data.liveClasses.length === 0 ? `
+                        <div class="alert alert-info text-center">
+                            <i class="bi bi-info-circle"></i> لا توجد حصص مسجلة لهذه الفترة
+                        </div>
+                    ` : `
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-striped">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th rowspan="2">اسم الطالب</th>
+                                        <th rowspan="2">رقم الطالب</th>
+                                        ${data.liveClasses.map(lc => `
+                                            <th colspan="3" class="text-center">
+                                                ${new Date(lc.date).toLocaleDateString('ar-EG')}
+                                                <br>
+                                                <small>${lc.startTime}</small>
+                                            </th>
+                                        `).join('')}
+                                        <th rowspan="2">الإجمالي</th>
+                                    </tr>
+                                    <tr>
+                                        ${data.liveClasses.map(() => `
+                                            <th class="text-center bg-success text-white">حاضر</th>
+                                            <th class="text-center bg-danger text-white">غائب</th>
+                                            <th class="text-center bg-warning text-white">متأخر</th>
+                                        `).join('')}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.students.map(student => `
+                                        <tr>
+                                            <td>${student.name}</td>
+                                            <td>${student.studentId}</td>
+                                            ${data.liveClasses.map(lc => {
+                                                const attendance = lc.attendance.find(a => a.student._id === student._id);
+                                                return `
+                                                    <td class="text-center ${attendance?.status === 'present' ? 'bg-success text-white' : ''}">
+                                                        ${attendance?.status === 'present' ? '✓' : ''}
+                                                    </td>
+                                                    <td class="text-center ${attendance?.status === 'absent' ? 'bg-danger text-white' : ''}">
+                                                        ${attendance?.status === 'absent' ? '✗' : ''}
+                                                    </td>
+                                                    <td class="text-center ${attendance?.status === 'late' ? 'bg-warning text-white' : ''}">
+                                                        ${attendance?.status === 'late' ? '⌚' : ''}
+                                                    </td>
+                                                `;
+                                            }).join('')}
+                                            <td class="text-center fw-bold">
+                                                ${student.statistics.present} حاضر<br>
+                                                ${student.statistics.absent} غائب<br>
+                                                ${student.statistics.late} متأخر
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="mt-3">
+                            <button class="btn btn-success" onclick="exportClassAttendance('${data.class._id}')">
+                                <i class="bi bi-file-earmark-excel"></i> تصدير إلى Excel
+                            </button>
+                            <button class="btn btn-primary ms-2" onclick="printClassAttendance('${data.class._id}')">
+                                <i class="bi bi-printer"></i> طباعة التقرير
+                            </button>
+                        </div>
+                    `}
+                </div>
+            </div>
+        </div>
+    `;
+
+    Swal.fire({
+        title: `غيابات الحصة - ${data.class.name}`,
+        html: html,
+        width: '1400px',
+        showConfirmButton: false,
+        showCloseButton: true,
+        customClass: {
+            popup: 'class-attendance-popup'
+        }
+    });
+}
+
+// دالة لتصدير بيانات الغيابات
+async function exportClassAttendance(classId) {
+    try {
+        const response = await fetch(`/api/live-classes/class/${classId}/attendance/export`, {
+            headers: getAuthHeaders()
+        });
+
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `غيابات_الحصة_${classId}.xlsx`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+    } catch (error) {
+        console.error('Error exporting attendance:', error);
+        Swal.fire('خطأ', 'فشل في تصدير البيانات', 'error');
+    }
+}
+
+// دالة للطباعة
+function printClassAttendance(classId) {
+    window.print();
+}
+
+// استدعاء الدالة عند تحميل الصفحة وتحديث الجدول
+document.addEventListener('DOMContentLoaded', function() {
+    addAttendanceButtonsToClassesTable();
+});
+
+// إعادة إضافة الأزرار عند تحديث الجدول
+
 function updateClassesTable(classes) {
     const tableBody = document.getElementById('classesTable');
+    if (!tableBody) {
+        console.log('جدول الحصص غير موجود في الصفحة الحالية');
+        return;
+    }
+    
     tableBody.innerHTML = '';
     
     if (classes.length === 0) {
@@ -7491,6 +8042,7 @@ function updateClassesTable(classes) {
     
     classes.forEach((cls, index) => {
         const row = document.createElement('tr');
+        row.dataset.classId = cls._id; // إضافة dataset للوصول إلى classId
         row.innerHTML = `
             <td>${index + 1}</td>
             <td>${cls.name}</td>
@@ -7508,13 +8060,44 @@ function updateClassesTable(classes) {
                 <button class="btn btn-sm btn-outline-success btn-action" onclick="showClassStudents('${cls._id}')">
                     <i class="bi bi-people"></i>
                 </button>
+<button class="btn btn-sm btn-gradient btn-action position-relative" onclick="showClassAttendance('${cls._id}')">
+  <i class="bi bi-calendar-check"></i> غيابات
+  <span class="badge bg-danger text-white position-absolute top-0 start-50 translate-middle-x new-badge">
+    جديد
+  </span>
+</button>
+
+<style>
+  .btn-gradient {
+    background: linear-gradient(45deg, #ff9800, #ffc107);
+    color: #fff;
+    border: none;
+    box-shadow: 0 0 8px rgba(255, 152, 0, 0.6);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .btn-gradient:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 12px rgba(255, 152, 0, 0.8);
+  }
+
+  .new-badge {
+    z-index: 1050;
+    font-size: 0.7rem;
+    padding: 2px 6px;
+  }
+</style>
+
             </td>
         `;
         tableBody.appendChild(row);
     });
     
-    document.getElementById('classesCount').textContent = classes.length;
-    document.getElementById('lNum').textContent = classes.length;
+    // تحديث العدادات مع التحقق من وجود العناصر
+    const classesCountElem = document.getElementById('classesCount');
+    const lNumElem = document.getElementById('lNum');
+    
+    if (classesCountElem) classesCountElem.textContent = classes.length;
+    if (lNumElem) lNumElem.textContent = classes.length;
 }
 
 
@@ -7669,47 +8252,54 @@ function simulateCardScan() {
     }, 3000);
 }
 
+// دالة محدثة لتحديث العدادات
 async function updateDashboardCounters() {
     try {
-        // تحميل عدد الطلاب
-        const studentsResponse = await fetch('/api/students', {
-            headers: getAuthHeaders()
-        });
-        
-        if (studentsResponse.ok) {
-            const students = await studentsResponse.json();
-            const totalStudents = students.length;
-            const unpaidRegistration = students.filter(s => !s.hasPaidRegistration).length;
-            
-            document.getElementById('studentsCount').textContent = totalStudents;
-            document.getElementById('stNum').textContent = totalStudents;
-            
-            // إضافة عنصر جديد لعرض الطلاب الذين لم يدفعوا
-            let unpaidElement = document.getElementById('unpaidRegistrationCount');
-            if (!unpaidElement) {
-                unpaidElement = document.createElement('div');
-                unpaidElement.id = 'unpaidRegistrationCount';
-                unpaidElement.className = 'col-md-3';
-                document.querySelector('.dashboard-counters').appendChild(unpaidElement);
-            }
-            
-            unpaidElement.innerHTML = `
-                <div class="card counter-card bg-warning text-dark">
-                    <div class="card-body text-center">
-                        <h6>طلاب بانتظار دفع التسجيل</h6>
-                        <h3>${unpaidRegistration}</h3>
-                    </div>
-                </div>
-            `;
+        // التحقق من وجود العناصر قبل الوصول إليها
+        const studentsCountElem = document.getElementById('studentsCount');
+        const teachersCountElem = document.getElementById('teachersCount');
+        const classesCountElem = document.getElementById('classesCount');
+        const paymentsCountElem = document.getElementById('paymentsCount');
+
+        // إذا لم توجد العناصر، توقف عن التنفيذ
+        if (!studentsCountElem || !teachersCountElem || !classesCountElem || !paymentsCountElem) {
+            console.log('عناصر العدادات غير موجودة في الصفحة الحالية');
+            return;
         }
-        
-        // باقي عدادات الداشبورد...
-    } catch (err) {
-        console.error('Error updating dashboard counters:', err);
+
+        // جلب البيانات
+        const [studentsRes, teachersRes, classesRes, paymentsRes] = await Promise.all([
+            fetch('/api/students/count').catch(err => ({ ok: false })),
+            fetch('/api/teachers/count').catch(err => ({ ok: false })),
+            fetch('/api/classes/count').catch(err => ({ ok: false })),
+            fetch('/api/payments/count').catch(err => ({ ok: false }))
+        ]);
+
+        // تحديث العدادات مع التحقق من صحة الاستجابة
+        if (studentsRes.ok) {
+            const data = await studentsRes.json();
+            studentsCountElem.textContent = data.count || 0;
+        }
+
+        if (teachersRes.ok) {
+            const data = await teachersRes.json();
+            teachersCountElem.textContent = data.count || 0;
+        }
+
+        if (classesRes.ok) {
+            const data = await classesRes.json();
+            classesCountElem.textContent = data.count || 0;
+        }
+
+        if (paymentsRes.ok) {
+            const data = await paymentsRes.json();
+            paymentsCountElem.textContent = data.count || 0;
+        }
+
+    } catch (error) {
+        console.error('Error updating dashboard counters:', error);
     }
 }
-
-
 
 function loadStudentsTable() {
     // يمكنك تنفيذ هذه الدالة أو استبدالها بـ loadStudents()

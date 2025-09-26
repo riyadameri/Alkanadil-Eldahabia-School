@@ -1,3 +1,75 @@
+
+.class-attendance-popup .swal2-popup {
+  max-width: 95vw !important;
+}
+
+.class-attendance-container table {
+  font-size: 0.85rem;
+}
+
+.class-attendance-container th {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.class-attendance-container .bg-success {
+  background-color: #198754 !important;
+}
+
+.class-attendance-container .bg-danger {
+  background-color: #dc3545 !important;
+}
+
+.class-attendance-container .bg-warning {
+  background-color: #ffc107 !important;
+  color: #000 !important;
+}
+
+.btn-attendance {
+  border-color: #ffc107;
+  color: #ffc107;
+}
+
+.btn-attendance:hover {
+  background-color: #ffc107;
+  color: #000;
+}
+
+@media print {
+  .class-attendance-container {
+      width: 100% !important;
+  }
+  
+  .btn {
+      display: none !important;
+  }
+}
+.table th.vertical-text {
+  writing-mode: vertical-lr;
+  transform: rotate(180deg);
+  min-width: 40px;
+  text-align: center;
+}
+
+.badge {
+  font-size: 0.75em;
+}
+
+.modal-xl {
+  max-width: 95%;
+}
+
+@media (max-width: 768px) {
+  .modal-xl {
+      max-width: 100%;
+      margin: 0.5rem;
+  }
+  
+  .table-responsive {
+      font-size: 0.8rem;
+  }
+}
+
 .form-text , .text-muted , #gateScannerStatus {
   font-size: 0.9rem;
   color: #bbd7ef;

@@ -11,7 +11,7 @@ require('dotenv').config();
   const bcrypt = require('bcryptjs');
   const nodemailer = require('nodemailer');
   const smsGateway = require('./sms-gateway');
-
+  const ExcelJS = require('exceljs');
   const app = express();
   const server = require('http').createServer(app);
 
@@ -232,6 +232,8 @@ require('dotenv').config();
   const liveClassSchema = new mongoose.Schema({
     class: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: true },
     date: { type: Date, required: true },
+    month: { type: String, default: new Date().toISOString().slice(0, 7), required: true }, // تنسيق: YYYY-MM
+
     startTime: { type: String, required: true },
     endTime: { type: String },
     teacher: { type: mongoose.Schema.Types.ObjectId, ref: 'Teacher', required: true },
@@ -247,7 +249,16 @@ require('dotenv').config();
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }
   }, { timestamps: true });
 
-
+// دالة لتحديث حقل الشهر تلقائياً قبل حفظ LiveClass
+liveClassSchema.pre('save', function(next) {
+  if (this.date) {
+    const date = new Date(this.date);
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    this.month = `${year}-${month}`;
+  }
+  next();
+});
 
 
   // Add these schemas near your other schemas
@@ -984,6 +995,8 @@ const validateObjectId = (req, res, next) => {
       res.status(400).json({ error: err.message });
     }
   });
+
+  
   
   app.get('/api/accounting/budgets', authenticate(['admin', 'accountant']), async (req, res) => {
     try {
@@ -1160,8 +1173,472 @@ const validateObjectId = (req, res, next) => {
       res.status(500).json({ error: err.message });
     }
   });
+  // get monthly atandance for class  using live classes shema
 
-  // نقطة نهاية جديدة للحصول على تفاصيل الأستاذ مع حصصه ومدفوعاته
+// الحصول على الغيابات الشهرية لحصة معينة
+app.get('/api/classes/:classId/monthly-attendance', async (req, res) => {
+  try {
+      const { classId } = req.params;
+      const { month, year } = req.query; // الصيغة: YYYY-MM
+
+      // بناء تاريخ البداية والنهاية للشهر المطلوب
+      const targetDate = month && year ? new Date(`${year}-${month}-01`) : new Date();
+      const startOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+      const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
+
+      // البحث عن الحصص الحية للحصة المطلوبة خلال الشهر
+      const liveClasses = await LiveClass.find({
+          class: classId,
+          date: {
+              $gte: startOfMonth,
+              $lte: endOfMonth
+          },
+          status: { $in: ['completed', 'ongoing'] }
+      })
+      .populate('class', 'name subject')
+      .populate('teacher', 'name')
+      .populate('classroom', 'name')
+      .populate({
+          path: 'attendance.student',
+          select: 'name studentId parentName academicYear'
+      });
+
+      if (!liveClasses || liveClasses.length === 0) {
+          return res.status(404).json({
+              message: 'لا توجد حصص مسجلة لهذه الفترة'
+          });
+      }
+
+      // تجميع بيانات الطلاب والغيابات
+      const studentsMap = new Map();
+      const classDetails = {
+          name: liveClasses[0].class.name,
+          subject: liveClasses[0].class.subject,
+          month: targetDate.toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' })
+      };
+
+      // معالجة كل حصة وجمع بيانات الحضور
+      liveClasses.forEach(liveClass => {
+          liveClass.attendance.forEach(att => {
+              const studentId = att.student._id.toString();
+              
+              if (!studentsMap.has(studentId)) {
+                  studentsMap.set(studentId, {
+                      student: {
+                          _id: att.student._id,
+                          name: att.student.name,
+                          studentId: att.student.studentId,
+                          parentName: att.student.parentName,
+                          academicYear: att.student.academicYear
+                      },
+                      attendanceRecords: []
+                  });
+              }
+
+              const studentData = studentsMap.get(studentId);
+              studentData.attendanceRecords.push({
+                  date: liveClass.date,
+                  status: att.status,
+                  classTime: liveClass.startTime,
+                  teacher: liveClass.teacher.name,
+                  classroom: liveClass.classroom.name,
+                  notes: liveClass.notes
+              });
+          });
+      });
+
+      // حساب الإحصائيات
+      const totalClasses = liveClasses.length;
+      const studentsAttendance = Array.from(studentsMap.values()).map(studentData => {
+          const presentCount = studentData.attendanceRecords.filter(record => 
+              record.status === 'present').length;
+          const absentCount = studentData.attendanceRecords.filter(record => 
+              record.status === 'absent').length;
+          const lateCount = studentData.attendanceRecords.filter(record => 
+              record.status === 'late').length;
+
+          const attendanceRate = totalClasses > 0 ? 
+              Math.round((presentCount / totalClasses) * 100) : 0;
+
+          return {
+              ...studentData,
+              statistics: {
+                  totalClasses,
+                  present: presentCount,
+                  absent: absentCount,
+                  late: lateCount,
+                  attendanceRate
+              }
+          };
+      });
+
+      res.json({
+          class: classDetails,
+          period: {
+              start: startOfMonth,
+              end: endOfMonth,
+              totalClasses: totalClasses
+          },
+          students: studentsAttendance,
+          summary: {
+              totalStudents: studentsAttendance.length,
+              averageAttendance: studentsAttendance.length > 0 ?
+                  Math.round(studentsAttendance.reduce((sum, student) => 
+                      sum + student.statistics.attendanceRate, 0) / studentsAttendance.length) : 0
+          }
+      });
+
+  } catch (error) {
+      console.error('Error fetching monthly attendance:', error);
+      res.status(500).json({
+          message: 'حدث خطأ أثناء جلب بيانات الغيابات',
+          error: error.message
+      });
+  }
+});  // نقطة نهاية جديدة للحصول على تفاصيل الأستاذ مع حصصه ومدفوعاته
+
+
+
+// تصدير الغيابات الشهرية إلى Excel
+app.get('/api/classes/:classId/monthly-attendance/export', async (req, res) => {
+  try {
+      const { classId } = req.params;
+      const { month } = req.query;
+
+      // جلب البيانات (نفس كود endpoint السابق)
+      const attendanceData = await getMonthlyAttendanceData(classId, month);
+
+      // إنشاء workbook جديد
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('الغيابات الشهرية');
+
+      // إضافة headers
+      worksheet.columns = [
+          { header: 'اسم الطالب', key: 'studentName', width: 25 },
+          { header: 'رقم الطالب', key: 'studentId', width: 15 },
+          { header: 'الصف', key: 'academicYear', width: 15 },
+          { header: 'الحضور', key: 'present', width: 10 },
+          { header: 'الغياب', key: 'absent', width: 10 },
+          { header: 'التأخير', key: 'late', width: 10 },
+          { header: 'نسبة الحضور%', key: 'attendanceRate', width: 15 }
+      ];
+
+      // إضافة البيانات
+      attendanceData.students.forEach(student => {
+          worksheet.addRow({
+              studentName: student.student.name,
+              studentId: student.student.studentId,
+              academicYear: getAcademicYearName(student.student.academicYear),
+              present: student.statistics.present,
+              absent: student.statistics.absent,
+              late: student.statistics.late,
+              attendanceRate: student.statistics.attendanceRate
+          });
+      });
+
+      // إعداد response للتحميل
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename=attendance_${classId}_${month}.xlsx`);
+
+      // كتابة workbook إلى response
+      await workbook.xlsx.write(res);
+      res.end();
+
+  } catch (error) {
+      console.error('Error exporting attendance:', error);
+      res.status(500).json({ message: 'حدث خطأ أثناء التصدير' });
+  }
+});
+
+// نقطة نهاية جديدة للحصول على غيابات حصة معينة من الحصص الحية
+app.get('/api/live-classes/class/:classId/attendance', authenticate(['admin', 'secretary', 'teacher']), async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const { startDate, endDate } = req.query;
+
+    if (!mongoose.Types.ObjectId.isValid(classId)) {
+      return res.status(400).json({ error: 'معرف الحصة غير صالح' });
+    }
+
+    // الحصول على بيانات الحصة
+    const classObj = await Class.findById(classId)
+      .populate('teacher')
+      .populate('students');
+    
+    if (!classObj) {
+      return res.status(404).json({ error: 'الحصة غير موجودة' });
+    }
+
+    // بناء استعلام للحصص الحية
+    const query = { 
+      class: classId,
+      status: { $in: ['completed', 'ongoing'] }
+    };
+
+    // إضافة فلترة التاريخ إذا وجدت
+    if (startDate && endDate) {
+      query.date = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      };
+    } else {
+      // افتراضي: آخر 30 يوم
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      query.date = { $gte: thirtyDaysAgo };
+    }
+
+    // الحصول على الحصص الحية
+    const liveClasses = await LiveClass.find(query)
+      .populate('attendance.student')
+      .populate('classroom')
+      .sort({ date: 1, startTime: 1 });
+
+    // ✅ تحقق إذا لم توجد حصص
+    if (!liveClasses.length) {
+      return res.status(200).json({
+        message: 'لا توجد حصص حية لهذه الحصة في الفترة المحددة',
+        class: {
+          _id: classObj._id,
+          name: classObj.name,
+          subject: classObj.subject,
+          teacher: classObj.teacher?.name
+        },
+        students: classObj.students.map(student => ({
+          _id: student._id,
+          name: student.name,
+          studentId: student.studentId,
+          statistics: { present: 0, absent: 0, late: 0 }
+        })),
+        summary: {
+          totalClasses: 0,
+          totalStudents: classObj.students.length,
+          totalPresent: 0,
+          totalAbsent: 0,
+          totalLate: 0
+        }
+      });
+    }
+
+    // تجميع بيانات الطلاب
+    const studentsData = classObj.students.map(student => {
+      const studentStats = {
+        present: 0,
+        absent: 0,
+        late: 0
+      };
+
+      // حساب الإحصائيات لكل طالب
+      liveClasses.forEach(lc => {
+        const attendanceRecord = lc.attendance.find(
+          att => att.student._id.toString() === student._id.toString()
+        );
+        
+        if (attendanceRecord) {
+          studentStats[attendanceRecord.status]++;
+        } else {
+          studentStats.absent++; // إذا لم يوجد سجل، يعتبر غائب
+        }
+      });
+
+      return {
+        _id: student._id,
+        name: student.name,
+        studentId: student.studentId,
+        statistics: studentStats
+      };
+    });
+
+    // إعداد البيانات للاستجابة
+    const responseData = {
+      class: {
+        _id: classObj._id,
+        name: classObj.name,
+        subject: classObj.subject,
+        teacher: classObj.teacher?.name
+      },
+      period: startDate && endDate 
+        ? `من ${new Date(startDate).toLocaleDateString('ar-EG')} إلى ${new Date(endDate).toLocaleDateString('ar-EG')}`
+        : 'آخر 30 يوم',
+      liveClasses: liveClasses.map(lc => ({
+        _id: lc._id,
+        date: lc.date,
+        startTime: lc.startTime,
+        endTime: lc.endTime,
+        classroom: lc.classroom?.name,
+        attendance: lc.attendance
+      })),
+      students: studentsData,
+      summary: {
+        totalClasses: liveClasses.length,
+        totalStudents: classObj.students.length,
+        totalPresent: studentsData.reduce((sum, student) => sum + student.statistics.present, 0),
+        totalAbsent: studentsData.reduce((sum, student) => sum + student.statistics.absent, 0),
+        totalLate: studentsData.reduce((sum, student) => sum + student.statistics.late, 0)
+      }
+    };
+
+    res.json(responseData);
+
+  } catch (error) {
+    console.error('Error fetching class attendance:', error);
+    res.status(500).json({ 
+      error: 'حدث خطأ أثناء جلب بيانات الحضور',
+      message: error.message 
+    });
+  }
+});
+
+
+// نقطة نهاية لتصدير البيانات إلى Excel
+app.get('/api/live-classes/class/:classId/attendance/export', authenticate(['admin', 'secretary', 'teacher']), async (req, res) => {
+  try {
+      const { classId } = req.params;
+
+      // جلب البيانات (نفس كود النقطة السابقة)
+      const attendanceData = await getClassAttendanceData(classId, req.query);
+
+      // إنشاء ملف Excel
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('غيابات الحصة');
+
+      // إضافة العناوين
+      worksheet.columns = [
+          { header: 'اسم الطالب', key: 'studentName', width: 25 },
+          { header: 'رقم الطالب', key: 'studentId', width: 15 }
+      ];
+
+      // إضافة تواريخ الحصص كعناوين أعمدة
+      attendanceData.liveClasses.forEach((lc, index) => {
+          const dateHeader = new Date(lc.date).toLocaleDateString('ar-EG');
+          worksheet.columns.push(
+              { header: `${dateHeader} (حاضر)`, key: `present_${index}`, width: 12 },
+              { header: `${dateHeader} (غائب)`, key: `absent_${index}`, width: 12 },
+              { header: `${dateHeader} (متأخر)`, key: `late_${index}`, width: 12 }
+          );
+      });
+
+      worksheet.columns.push(
+          { header: 'إجمالي الحضور', key: 'totalPresent', width: 15 },
+          { header: 'إجمالي الغياب', key: 'totalAbsent', width: 15 },
+          { header: 'إجمالي التأخير', key: 'totalLate', width: 15 }
+      );
+
+      // إضافة البيانات
+      attendanceData.students.forEach(student => {
+          const rowData = {
+              studentName: student.name,
+              studentId: student.studentId
+          };
+
+          // بيانات كل حصة
+          attendanceData.liveClasses.forEach((lc, index) => {
+              const attendance = lc.attendance.find(a => a.student._id === student._id);
+              rowData[`present_${index}`] = attendance?.status === 'present' ? '✓' : '';
+              rowData[`absent_${index}`] = attendance?.status === 'absent' ? '✗' : '';
+              rowData[`late_${index}`] = attendance?.status === 'late' ? '⌚' : '';
+          });
+
+          // الإجماليات
+          rowData.totalPresent = student.statistics.present;
+          rowData.totalAbsent = student.statistics.absent;
+          rowData.totalLate = student.statistics.late;
+
+          worksheet.addRow(rowData);
+      });
+
+      // إعداد الاستجابة للتحميل
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename=class_attendance_${classId}.xlsx`);
+
+      await workbook.xlsx.write(res);
+      res.end();
+
+  } catch (error) {
+      console.error('Error exporting class attendance:', error);
+      res.status(500).json({ error: 'حدث خطأ أثناء التصدير' });
+  }
+});
+
+// دالة مساعدة لجلب بيانات الغيابات
+async function getClassAttendanceData(classId, queryParams = {}) {
+  const { startDate, endDate } = queryParams;
+
+  const classObj = await Class.findById(classId)
+      .populate('teacher')
+      .populate('students');
+
+  const query = { 
+      class: classId,
+      status: { $in: ['completed', 'ongoing'] }
+  };
+
+  if (startDate && endDate) {
+      query.date = {
+          $gte: new Date(startDate),
+          $lte: new Date(endDate)
+      };
+  } else {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      query.date = { $gte: thirtyDaysAgo };
+  }
+
+  const liveClasses = await LiveClass.find(query)
+      .populate('attendance.student')
+      .populate('classroom')
+      .sort({ date: 1, startTime: 1 });
+
+  const studentsData = classObj.students.map(student => {
+      const studentStats = { present: 0, absent: 0, late: 0 };
+
+      liveClasses.forEach(lc => {
+          const attendanceRecord = lc.attendance.find(
+              att => att.student._id.toString() === student._id.toString()
+          );
+          
+          if (attendanceRecord) {
+              studentStats[attendanceRecord.status]++;
+          } else {
+              studentStats.absent++;
+          }
+      });
+
+      return {
+          _id: student._id,
+          name: student.name,
+          studentId: student.studentId,
+          statistics: studentStats
+      };
+  });
+
+  return {
+      class: {
+          _id: classObj._id,
+          name: classObj.name,
+          subject: classObj.subject,
+          teacher: classObj.teacher?.name
+      },
+      liveClasses: liveClasses.map(lc => ({
+          _id: lc._id,
+          date: lc.date,
+          startTime: lc.startTime,
+          endTime: lc.endTime,
+          classroom: lc.classroom?.name,
+          attendance: lc.attendance
+      })),
+      students: studentsData,
+      summary: {
+          totalClasses: liveClasses.length,
+          totalStudents: classObj.students.length,
+          totalPresent: studentsData.reduce((sum, student) => sum + student.statistics.present, 0),
+          totalAbsent: studentsData.reduce((sum, student) => sum + student.statistics.absent, 0),
+          totalLate: studentsData.reduce((sum, student) => sum + student.statistics.late, 0)
+      }
+  };
+}
+
+
 app.get('/api/teachers/:id/details', authenticate(['admin', 'accountant', 'teacher']), async (req, res) => {
   try {
     const teacherId = req.params.id;
@@ -1951,6 +2428,95 @@ app.get('/api/accounting/reports/financial', authenticate(['admin', 'accountant'
     }
   });
 
+
+  // تقرير الغيابات الشهرية لحصة معينة
+app.get('/api/live-classes/:classId/monthly-attendance', authenticate(['admin', 'secretary', 'teacher']), async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const { month, year } = req.query; // month: 1-12, year: YYYY
+    
+    if (!month || !year) {
+      return res.status(400).json({ error: 'يجب تحديد الشهر والسنة' });
+    }
+
+    const monthStr = `${year}-${month.toString().padStart(2, '0')}`;
+    
+    // الحصول على الحصة الأساسية
+    const classObj = await Class.findById(classId).populate('students');
+    if (!classObj) {
+      return res.status(404).json({ error: 'الحصة غير موجودة' });
+    }
+
+    // الحصول على جميع الحصص الحية لهذا الشهر
+    const liveClasses = await LiveClass.find({
+      class: classId,
+      month: monthStr,
+      status: 'completed'
+    }).populate('attendance.student');
+
+    // إنشاء هيكل البيانات للتقرير
+    const report = {
+      class: {
+        _id: classObj._id,
+        name: classObj.name,
+        subject: classObj.subject
+      },
+      month: monthStr,
+      totalClasses: liveClasses.length,
+      students: []
+    };
+
+    // تهيئة بيانات كل طالب
+    classObj.students.forEach(student => {
+      const studentData = {
+        studentId: student.studentId,
+        name: student.name,
+        totalAbsent: 0,
+        totalPresent: 0,
+        totalLate: 0,
+        attendanceByDate: {}
+      };
+
+      // تهيئة بيانات الحضور لكل تاريخ
+      liveClasses.forEach(liveClass => {
+        const dateStr = new Date(liveClass.date).toISOString().split('T')[0];
+        studentData.attendanceByDate[dateStr] = 'absent'; // افتراضي غائب
+        
+        // البحث عن سجل الحضور للطالب
+        const attendanceRecord = liveClass.attendance.find(
+          att => att.student._id.toString() === student._id.toString()
+        );
+        
+        if (attendanceRecord) {
+          studentData.attendanceByDate[dateStr] = attendanceRecord.status;
+          
+          // تحديث الإحصائيات
+          if (attendanceRecord.status === 'present') {
+            studentData.totalPresent++;
+          } else if (attendanceRecord.status === 'late') {
+            studentData.totalLate++;
+          } else if (attendanceRecord.status === 'absent') {
+            studentData.totalAbsent++;
+          }
+        } else {
+          studentData.totalAbsent++;
+        }
+      });
+
+      report.students.push(studentData);
+    });
+
+    // إضافة تواريخ الحصص
+    report.classDates = liveClasses.map(lc => 
+      new Date(lc.date).toISOString().split('T')[0]
+    ).sort();
+
+    res.json(report);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
   app.post('/api/attendance', authenticate(['admin', 'secretary', 'teacher']), async (req, res) => {
     try {
       const attendance = new Attendance({
@@ -1964,7 +2530,106 @@ app.get('/api/accounting/reports/financial', authenticate(['admin', 'accountant'
     }
   });
 
+// تقرير الغيابات الشهرية لطالب معين
+app.get('/api/students/:studentId/monthly-attendance', authenticate(['admin', 'secretary', 'teacher', 'student']), async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const { month, year } = req.query;
+    
+    if (!month || !year) {
+      return res.status(400).json({ error: 'يجب تحديد الشهر والسنة' });
+    }
 
+    const monthStr = `${year}-${month.toString().padStart(2, '0')}`;
+    
+    // التحقق من صلاحية المستخدم (الطالب يمكنه رؤية بياناته فقط)
+    if (req.user.role === 'student' && req.user.studentId !== studentId) {
+      return res.status(403).json({ error: 'غير مصرح بالوصول لهذه البيانات' });
+    }
+
+    // الحصول على بيانات الطالب
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ error: 'الطالب غير موجود' });
+    }
+
+    // الحصول على جميع الحصص الحية للطالب في هذا الشهر
+    const liveClasses = await LiveClass.find({
+      month: monthStr,
+      status: 'completed',
+      'class': { $in: student.classes }
+    })
+    .populate('class')
+    .populate('attendance.student');
+
+    // تجميع البيانات
+    const report = {
+      student: {
+        _id: student._id,
+        name: student.name,
+        studentId: student.studentId,
+        academicYear: student.academicYear
+      },
+      month: monthStr,
+      attendanceByClass: {},
+      summary: {
+        totalClasses: 0,
+        totalPresent: 0,
+        totalAbsent: 0,
+        totalLate: 0,
+        attendanceRate: 0
+      }
+    };
+
+    // معالجة كل حصة
+    liveClasses.forEach(liveClass => {
+      const classId = liveClass.class._id.toString();
+      
+      if (!report.attendanceByClass[classId]) {
+        report.attendanceByClass[classId] = {
+          class: {
+            _id: liveClass.class._id,
+            name: liveClass.class.name,
+            subject: liveClass.class.subject
+          },
+          attendance: []
+        };
+      }
+
+      // البحث عن سجل الحضور للطالب
+      const attendanceRecord = liveClass.attendance.find(
+        att => att.student._id.toString() === studentId
+      );
+
+      const status = attendanceRecord ? attendanceRecord.status : 'absent';
+      const dateStr = new Date(liveClass.date).toLocaleDateString('ar-EG');
+      
+      report.attendanceByClass[classId].attendance.push({
+        date: liveClass.date,
+        dateString: dateStr,
+        status: status,
+        liveClassId: liveClass._id
+      });
+
+      // تحديث الإحصائيات
+      report.summary.totalClasses++;
+      if (status === 'present') report.summary.totalPresent++;
+      else if (status === 'absent') report.summary.totalAbsent++;
+      else if (status === 'late') report.summary.totalLate++;
+    });
+
+    // حساب نسبة الحضور
+    if (report.summary.totalClasses > 0) {
+      report.summary.attendanceRate = Math.round(
+        (report.summary.totalPresent / report.summary.totalClasses) * 100
+      );
+    }
+
+    res.json(report);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
   // Cards
   app.get('/api/cards', authenticate(['admin', 'secretary']), async (req, res) => {
@@ -2099,34 +2764,20 @@ app.delete('/api/payments/:id', authenticate(['admin', 'accountant']), async (re
   // Payments
 // Payments - Update the GET endpoint to populate class data
 // Update the GET /api/payments endpoint
-app.get('/api/payments', authenticate(['admin', 'secretary', 'accountant']), async (req, res) => {
+// نقطة نهاية جديدة لعد المدفوعات
+app.get('/api/payments/count', async (req, res) => {
   try {
-    const { student, class: classId, month, status } = req.query;
-    const query = {};
-
-    if (student) query.student = student;
-    if (classId) query.class = classId;
-    if (month) query.month = month;
-    if (status) query.status = status;
-
-    const payments = await Payment.find(query)
-      .populate('student')
-      .populate({
-        path: 'class',
-        populate: [
-          { path: 'teacher', model: 'Teacher' },
-          { path: 'schedule.classroom', model: 'Classroom' }
-        ]
-      })
-      .populate('recordedBy')
-      .sort({ month: 1 });
-    
-    res.json(payments);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+      const { status } = req.query;
+      const query = {};
+      
+      if (status) query.status = status;
+      
+      const count = await Payment.countDocuments(query);
+      res.json({ count, status: 'success' });
+  } catch (error) {
+      res.status(500).json({ error: 'Failed to count payments', status: 'error' });
   }
 });
-
 // Get multiple payments by IDs (for printing multiple receipts)
 // Get multiple payments by IDs (for printing multiple receipts)
 app.post('/api/payments/bulk', authenticate(['admin', 'secretary', 'accountant']), async (req, res) => {
@@ -2246,6 +2897,34 @@ app.put('/api/payments/:id/pay', authenticate(['admin', 'secretary', 'accountant
     });
   } catch (err) {
     console.error('Payment registration error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/payments', authenticate(['admin', 'secretary', 'accountant']), async (req, res) => {
+  try {
+    const { student, class: classId, month, status } = req.query;
+    const query = {};
+
+    if (student) query.student = student;
+    if (classId) query.class = classId;
+    if (month) query.month = month;
+    if (status) query.status = status;
+
+    const payments = await Payment.find(query)
+      .populate('student')
+      .populate({
+        path: 'class',
+        populate: [
+          { path: 'teacher', model: 'Teacher' },
+          { path: 'schedule.classroom', model: 'Classroom' }
+        ]
+      })
+      .populate('recordedBy')
+      .sort({ month: 1 });
+    
+    res.json(payments);
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
