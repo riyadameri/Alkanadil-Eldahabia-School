@@ -10745,7 +10745,13 @@ async function handleNoOngoingClasses(studentId) {
                 icon: 'info',
                 title: 'لا توجد حصص',
                 text: 'لا توجد حصص مجدولة اليوم',
-                confirmButtonText: 'حسناً'
+                confirmButtonText: 'حسناً',
+                timer: 3000,
+                showCancelButton: false
+            }).then(result => {
+                if (result.isConfirmed || result.dismiss === Swal.DismissReason.timer) {
+                    return;
+                }
             });
         }
     }

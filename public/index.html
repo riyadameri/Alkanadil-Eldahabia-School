@@ -1031,26 +1031,31 @@
                         <!-- Gate Interface Section -->
 <!-- Gate Interface Section -->
 <div id="gate-interface" class="content-section">
-    <div class="card shadow-sm">
+    <div class="card shadow-sm h-100">
         <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-            <h5 class="mb-0"><i class="bi bi-door-open me-2"></i>واجهة المدخل - نظام الحضور</h5>
-            <div>
+            <h5 class="mb-0"><i class="bi bi-door-open me-2"></i> واجهة المدخل - نظام الحضور</h5>
+            <div class="d-flex align-items-center">
+                <!-- زر ملء الشاشة -->
+                <button class="btn btn-sm btn-light me-2" onclick="toggleFullscreen()">
+                    <i id="fullscreenIcon" class="bi bi-arrows-fullscreen"></i>
+                </button>
                 <span id="gateStatus" class="badge bg-success">نشط</span>
                 <span class="badge bg-info ms-2" id="currentTime">00:00:00</span>
             </div>
         </div>
-        <div class="card-body">
-            <div class="row">
+        <div class="card-body h-100">
+            <div class="row h-100">
                 <!-- Column 1: Scanner Input -->
-                <div class="col-md-5">
-                    <div class="gate-scanner-section p-3 dfe rounded">
+                <div class="col-md-4 d-flex flex-column">
+                    <div class="gate-scanner-section p-3  rounded shadow-sm flex-fill">
                         <h6 class="text-center mb-3"><i class="bi bi-credit-card text-primary"></i> مسح البطاقة</h6>
                         
                         <div class="mb-3">
                             <label for="gateCardInput" class="form-label">رقم البطاقة:</label>
                             <input type="text" class="form-control form-control-lg text-center" 
                                    id="gateCardInput" placeholder="امرر البطاقة هنا..." 
-                                   autocomplete="off" autofocus>
+                                   autocomplete="off" autofocus
+                                   onkeypress="if(event.key==='Enter'){showStudentCard()}">
                             <div class="form-text">استخدم قارئ البطاقات أو اكتب الرقم يدوياً</div>
                         </div>
                         
@@ -1058,11 +1063,11 @@
                             <div class="spinner-border text-primary spinner-border-sm" role="status" id="gateSpinner" style="display: none;">
                                 <span class="visually-hidden">جاري المسح...</span>
                             </div>
-                            <span id="gateScannerStatus" class="   ">جاهز للمسح</span>
+                            <span id="gateScannerStatus">جاهز للمسح</span>
                         </div>
                     </div>
                     
-                    <div class="current-class-info mt-3 p-3  rounded">
+                    <div class="current-class-info mt-3 p-3  rounded shadow-sm">
                         <h6><i class="bi bi-clock-history text-primary"></i> الحصة الجارية:</h6>
                         <div id="currentClassDetails">
                             <div class="text-center py-3">
@@ -1076,31 +1081,21 @@
                 </div>
                 
                 <!-- Column 2: Student Info -->
-                <div class="col-md-7">
-                    <div class="gate-result-section">
+                <div class="col-md-8 d-flex flex-column">
+                    <div class="gate-result-section flex-fill p-3  rounded shadow-sm">
                         <h6 class="text-center mb-3"><i class="bi bi-person-check text-success"></i> نتيجة المسح</h6>
-                        <div id="gateRfidResult" class="text-center p-4  rounded">
-                            <div class="gate-placeholder">
-                                <i class="bi bi-credit-card-2-front    " style="font-size: 3rem;"></i>
-                                <p class="    mt-2">سيظهر هنا معلومات الطالب بعد مسح البطاقة</p>
+                        <div id="gateRfidResult" class="d-flex justify-content-center align-items-center flex-column p-4">
+                            <div class="gate-placeholder text-center text-muted">
+                                <i  style="color : #d9edff ; font-size: 7rem;" class="bi bi-credit-card-2-front" style="font-size: 3rem;"></i>
+                                <p class="mt-2" style="color : #d9edff">سيظهر هنا معلومات الطالب بعد مسح البطاقة</p>
                             </div>
                         </div>
-                        
-                        <div class="quick-actions mt-3 text-center">
-                            <button class="btn btn-outline-secondary btn-sm me-2" onclick="manualAttendance()">
-                                <i class="bi bi-pencil"></i> تسجيل يدوي
-                            </button>
-                            <button class="btn btn-outline-info btn-sm me-2" onclick="showRecentScans()">
-                                <i class="bi bi-clock-history"></i> السجلات الحديثة
-                            </button>
-                            <button class="btn btn-outline-warning btn-sm" onclick="clearGateResults()">
-                                <i class="bi bi-x-circle"></i> مسح النتائج
-                            </button>
-                        </div>
+                         
+
                     </div>
                     
                     <!-- Recent Scans List -->
-                    <div class="recent-scans mt-4" id="recentScansSection" style="display: none;">
+                    <div class="recent-scans mt-4 p-3 bg-light rounded shadow-sm" id="recentScansSection" style="display: none;">
                         <h6><i class="bi bi-list-check text-primary"></i> آخر 5 عمليات مسح:</h6>
                         <div id="recentScansList" class="list-group mt-2"></div>
                     </div>
@@ -1110,7 +1105,7 @@
             <!-- Statistics Row -->
             <div class="row mt-4">
                 <div class="col-12">
-                    <div class="gate-statistics p-3 bg-light rounded">
+                    <div class="gate-statistics p-3  rounded shadow-sm">
                         <div class="row text-center">
                             <div class="col-md-3">
                                 <h5 id="todayScans">0</h5>
@@ -1133,8 +1128,49 @@
                 </div>
             </div>
         </div>
-    </div>
+    </div> 
 </div>
+
+<script>
+function toggleFullscreen() {
+    const elem = document.getElementById("gate-interface");
+    const icon = document.getElementById("fullscreenIcon");
+
+    if (!document.fullscreenElement) {
+        elem.requestFullscreen().then(() => {
+            icon.classList.remove("bi-arrows-fullscreen");
+            icon.classList.add("bi-fullscreen-exit");
+        }).catch(err => {
+            alert(`خطأ: ${err.message}`);
+        });
+    } else {
+        document.exitFullscreen().then(() => {
+            icon.classList.remove("bi-fullscreen-exit");
+            icon.classList.add("bi-arrows-fullscreen");
+        });
+    }
+}
+
+// ديمو: إظهار بطاقة الطالب عند تمرير البطاقة
+function showStudentCard() {
+    const resultDiv = document.getElementById("gateRfidResult");
+    const cardId = document.getElementById("gateCardInput").value || "123456";
+
+    resultDiv.innerHTML = `
+        <div class="card shadow-lg border-0" style="max-width:400px; width:100%;">
+            <div class="card-body text-center">
+                <img src="https://via.placeholder.com/120x120.png?text=Student" 
+                     class="rounded-circle mb-3 border" alt="صورة الطالب">
+                <h5 class="card-title">اسم الطالب الافتراضي</h5>
+                <p class="card-text text-muted">رقم البطاقة: ${cardId}</p>
+                <span class="badge bg-success">تم تسجيل الحضور</span>
+            </div>
+        </div>
+    `;
+}
+</script>
+
+
 
 
                     </div>
