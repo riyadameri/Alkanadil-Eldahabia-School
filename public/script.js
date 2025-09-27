@@ -1269,7 +1269,7 @@ function showStudentModal(student) {
     // تعيين أحداث الأزرار داخل المودال
     document.getElementById('modalEditBtn').onclick = () => editStudent(student._id);
     document.getElementById('modalDeleteBtn').onclick = () => deleteStudent(student._id);
-    document.getElementById('modalEnrollBtn').onclick = () => showEnrollModal(student._id);
+    // document.getElementById('modalEnrollBtn').onclick = () => showEnrollModal(student._id);
     document.getElementById('modalAttendanceBtn').onclick = () => showAttendanceModal(student._id);
     document.getElementById('modalPrintBtn').onclick = () => printRegistrationReceipt(`${student._id},600`);
 
@@ -12807,4 +12807,3 @@ function initializeMultiEnrollEvents() {
         confirmMultiEnrollment();
     });
 }
-

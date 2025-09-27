@@ -1,6 +1,35 @@
 
 /* إصلاح مشكلة aria-hidden في المودال */
 /* تنسيقات إضافية */
+.loading-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+  justify-content: center;
+  align-items: center;
+}
+
+.loading-spinner {
+  background: white;
+  padding: 30px;
+  border-radius: 10px;
+  text-align: center;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+}
+
+.loading-text {
+  margin-top: 15px;
+  font-size: 16px;
+  color: #333;
+}
+
+
+
 .class-checkbox:checked + label {
   background-color: #e8f5e8;
   border-radius: 4px;
