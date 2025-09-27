@@ -1176,6 +1176,9 @@ function showStudentCard() {
                     </div>
                 </div>
             </div>
+
+
+
 <!-- Student Info Modal -->
 <div class="modal fade" id="studentModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -1191,18 +1194,21 @@ function showStudentCard() {
           <p><strong>السنة الدراسية:</strong> <span id="modalAcademicYear"></span></p>
           <p><strong>عدد الفصول:</strong> <span id="modalClassesCount"></span></p>
         </div>
-        <div class="modal-footer">
-          <button class="btn btn-outline-primary" id="modalEditBtn"><i class="bi bi-pencil"></i> تعديل</button>
-          <button class="btn btn-outline-danger" id="modalDeleteBtn"><i class="bi bi-trash"></i> حذف</button>
-          <button class="btn btn-outline-success" id="modalEnrollBtn"><i class="bi bi-book"></i> تسجيل</button>
-          <button class="btn btn-outline-info" id="modalAttendanceBtn"><i class="bi bi-clock-history"></i> الحضور</button>
-          <button class="btn btn-outline-warning" id="modalPrintBtn"><i class="bi bi-cash"></i> طباعة إيصال</button>
-<!-- في HTML -->
-<button class="btn btn-sm btn-outline-warning btn-action" onclick="showStudentPayments('${student._id}')">
-    <i class="bi bi-cash-coin me-1"></i> دفع الحصص
+<!-- في قسم modal-footer في studentModal -->
+<div class="modal-footer">
+    <button class="btn btn-outline-primary" id="modalEditBtn"><i class="bi bi-pencil"></i> تعديل</button>
+    <button class="btn btn-outline-danger" id="modalDeleteBtn"><i class="bi bi-trash"></i> حذف</button>
+    <button class="btn btn-outline-success" id="modalEnrollBtn"><i class="bi bi-book"></i> تسجيل</button>
+    <button class="btn btn-outline-info" id="modalAttendanceBtn"><i class="bi bi-clock-history"></i> الحضور</button>
+    <button class="btn btn-outline-warning" id="modalPrintBtn"><i class="bi bi-cash"></i> طباعة إيصال</button>
+    
+<!-- في قسم modal-footer في studentModal -->
+<button class="btn btn-sm btn-outline-success btn-action" id="modalMultiEnrollBtn">
+    <i class="bi bi-plus-circle me-1"></i>
+    تسجيل في حصص متعددة
 </button>
-        
-        </div>
+
+  </div>
       </div>
     </div>
   </div>
@@ -1559,7 +1565,32 @@ function showStudentCard() {
             </div>
 
             <!-- Add this section to your HTML file, within the main-app div -->
-
+<!-- Modal لتسجيل الحصص المتعددة -->
+<div class="modal fade" id="multiEnrollModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">تسجيل الطالب في حصص متعددة</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">اختر الحصص المراد التسجيل فيها:</label>
+                    <div id="classesChecklist" class="border p-3" style="max-height: 300px; overflow-y: auto;">
+                        <!-- سيتم ملء القائمة هنا بالجافاسكريبت -->
+                    </div>
+                </div>
+                <div class="selected-count alert alert-info">
+                    تم اختيار <span id="selectedClassesCount">0</span> حصة
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <button type="button" class="btn btn-primary" id="confirmMultiEnroll">تأكيد التسجيل</button>
+            </div>
+        </div>
+    </div>
+</div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>

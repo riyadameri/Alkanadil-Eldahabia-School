@@ -1261,6 +1261,7 @@ document.getElementById('logoutBtn').addEventListener('click', function(e) {
 function showStudentModal(student) {
     document.getElementById('modalStudentName').textContent = student.name;
     document.getElementById('modalStudentId').textContent = student.studentId;
+    
     document.getElementById('modalParentName').textContent = student.parentName || '-';
     document.getElementById('modalAcademicYear').textContent = getAcademicYearName(student.academicYear) || '-';
     document.getElementById('modalClassesCount').textContent = student.classes?.length || 0;
@@ -1272,9 +1273,18 @@ function showStudentModal(student) {
     document.getElementById('modalAttendanceBtn').onclick = () => showAttendanceModal(student._id);
     document.getElementById('modalPrintBtn').onclick = () => printRegistrationReceipt(`${student._id},600`);
 
+    const multiEnrollBtn = document.getElementById('modalMultiEnrollBtn');
+    if (multiEnrollBtn) {
+        multiEnrollBtn.onclick = () => {
+            window.currentStudentId = student._id;
+            showMultiEnrollModal(student._id);
+        };
+    }
+
     // عرض المودال
     const modal = new bootstrap.Modal(document.getElementById('studentModal'));
     modal.show();
+
 }
 
 // Data loading functions (students, teachers, classes, etc.)
@@ -1633,6 +1643,13 @@ window.showStudentDetails = async function(studentId, event = null) {
                                                     <i class="bi bi-printer"></i>
                                                 </button>
                                             `}
+                                                                ${payment.status === 'paid' ? `
+
+                        <button class="btn btn-sm btn-outline-danger btn-action" onclick="deletePayment('${payment._id}')">
+        <i class="bi bi-trash"></i>
+    </button>
+
+                    ` : ''}
                                         </td>
                                     </tr>
                                 `).join('')}
@@ -3587,6 +3604,19 @@ window.showClassStudents = async function(classId, selectedMonth = null, viewMod
                                                             ${payment.status === 'paid' ? 'disabled' : ''}>
                                                             <i class="bi ${payment.status !== 'paid' ? 'bi-cash' : 'bi-check2'}"></i>
                                                         </button>
+
+                                                                      ${payment.status === 'paid' ? `
+                    <button class="btn btn-sm btn-info btn-action" onclick="reprintPaymentReceipt('${payment._id}')">
+                        <i class="bi bi-printer"></i>
+                    </button>
+                        <button class="btn btn-sm btn-outline-danger btn-action" onclick="deletePayment('${payment._id}')">
+        <i class="bi bi-trash"></i>
+    </button>
+
+                    ` : ''}
+      
+
+
                                                     </td>
                                                 </tr>
                                             `).join('')}
@@ -3697,31 +3727,462 @@ window.filterPaymentsByMonth = function(classId, month, viewMode) {
 };
 
 // دالة لطباعة قائمة الطلاب
-window.printStudentsList = function(classId) {
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(`
-        <!DOCTYPE html>
-        <html dir="rtl">
-        <head>
-            <title>قائمة الطلاب</title>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 20px; }
-                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
-                th { background-color: #f8f9fa; }
-                h2 { text-align: center; margin-bottom: 20px; }
-            </style>
-        </head>
-        <body>
-            <h2>قائمة الطلاب</h2>
-            <div id="content"></div>
-        </body>
-        </html>
-    `);
-    
-    // سيتم ملء المحتوى عبر JavaScript
-    printWindow.document.close();
-    printWindow.print();
+// دالة لطباعة قائمة الطلاب أو المدفوعات
+window.printStudentsList = async function(classId, selectedMonth = null, viewMode = 'studentsOnly') {
+    try {
+        // جلب بيانات الحصة والطلاب
+        const classResponse = await fetch(`/api/classes/${classId}`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!classResponse.ok) {
+            throw new Error('فشل في تحميل بيانات الحصة');
+        }
+
+        const classObj = await classResponse.json();
+        
+        // جلب بيانات الطلاب
+        const students = await Promise.all(
+            classObj.students.map(studentId => {
+                const id = typeof studentId === 'object' ? studentId._id : studentId;
+                return fetch(`/api/students/${id}`, {
+                    headers: getAuthHeaders()
+                }).then(res => res.json());
+            })
+        );
+
+        const activeStudents = students.filter(s => s.status !== 'rejected' && s.status !== 'pending');
+
+        // إنشاء نافذة الطباعة
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            Swal.fire('خطأ', 'فشل في فتح نافذة الطباعة. الرجاء السماح بالنوافذ المنبثقة.', 'error');
+            return;
+        }
+
+        // SVG للكود QR (يمكن استبداله برابط الصورة الفعلي)
+        const qrCodeSvg = `
+            <svg width="80" height="80" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+                <rect width="80" height="80" fill="#f8f9fa"/>
+                <path d="M20 20h10v10H20z M50 20h10v10H50z M20 50h10v10H20z M35 35h10v10H35z" fill="#000"/>
+                <text x="40" y="75" text-anchor="middle" font-size="8" fill="#666">كود الفصل</text>
+            </svg>
+        `;
+
+        // إنشاء محتوى HTML للطباعة
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html lang="ar" dir="rtl">
+            <head>
+                <meta charset="UTF-8">
+                <title>قائمة الطلاب - ${classObj.name}</title>
+                <link rel="preconnect" href="https://fonts.googleapis.com">
+                <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+                <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
+                <style>
+                    * {
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                    }
+                    
+                    body {
+                        font-family: 'Cairo', 'Arial', sans-serif;
+                        background: #ffffff;
+                        color: #333;
+                        line-height: 1.6;
+                        padding: 20px;
+                    }
+                    
+                    .container {
+                        max-width: 1000px;
+                        margin: 0 auto;
+                        background: #fff;
+                    }
+                    
+                    .header {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: flex-start;
+                        border-bottom: 3px solid #2c5aa0;
+                        padding-bottom: 20px;
+                        margin-bottom: 30px;
+                    }
+                    
+                    .school-info {
+                        flex: 1;
+                    }
+                    
+                    .school-name {
+                        font-size: 28px;
+                        font-weight: 700;
+                        color: #2c5aa0;
+                        margin-bottom: 5px;
+                    }
+                    
+                    .school-subtitle {
+                        font-size: 18px;
+                        color: #666;
+                        margin-bottom: 10px;
+                    }
+                    
+                    .document-title {
+                        font-size: 24px;
+                        font-weight: 600;
+                        color: #333;
+                        background: #f8f9fa;
+                        padding: 10px 20px;
+                        border-radius: 5px;
+                        text-align: center;
+                        margin: 15px 0;
+                    }
+                    
+                    .logo-container {
+                        width: 120px;
+                        height: 120px;
+                        border: 2px solid #2c5aa0;
+                        border-radius: 10px;
+                        padding: 5px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    }
+                    
+                    .school-logo {
+                        max-width: 100%;
+                        max-height: 100%;
+                        object-fit: contain;
+                    }
+                    
+                    .class-info {
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        padding: 20px;
+                        border-radius: 10px;
+                        margin-bottom: 25px;
+                        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+                    }
+                    
+                    .class-info-grid {
+                        display: grid;
+                        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                        gap: 15px;
+                    }
+                    
+                    .info-item {
+                        display: flex;
+                        flex-direction: column;
+                    }
+                    
+                    .info-label {
+                        font-size: 12px;
+                        opacity: 0.9;
+                        margin-bottom: 5px;
+                    }
+                    
+                    .info-value {
+                        font-size: 16px;
+                        font-weight: 600;
+                    }
+                    
+                    .students-table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin: 25px 0;
+                        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                    }
+                    
+                    .students-table th {
+                        background: linear-gradient(135deg, #2c5aa0 0%, #1e3a8a 100%);
+                        color: white;
+                        padding: 15px;
+                        text-align: center;
+                        font-weight: 600;
+                        font-size: 14px;
+                    }
+                    
+                    .students-table td {
+                        padding: 12px 15px;
+                        border-bottom: 1px solid #e0e0e0;
+                        text-align: center;
+                    }
+                    
+                    .students-table tr:nth-child(even) {
+                        background-color: #f8f9fa;
+                    }
+                    
+                    .students-table tr:hover {
+                        background-color: #e3f2fd;
+                    }
+                    
+                    .student-name {
+                        font-weight: 600;
+                        color: #2c5aa0;
+                    }
+                    
+                    .student-id {
+                        font-family: 'Courier New', monospace;
+                        background: #f1f3f4;
+                        padding: 2px 6px;
+                        border-radius: 3px;
+                        font-size: 12px;
+                    }
+                    
+                    .academic-year {
+                        background: #e8f5e8;
+                        color: #2e7d32;
+                        padding: 4px 8px;
+                        border-radius: 15px;
+                        font-size: 12px;
+                        font-weight: 600;
+                    }
+                    
+                    .footer {
+                        margin-top: 40px;
+                        padding: 20px;
+                        border-top: 2px solid #e0e0e0;
+                        text-align: center;
+                        color: #666;
+                    }
+                    
+                    .footer-info {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        margin-top: 15px;
+                    }
+                    
+                    .qr-code {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        gap: 5px;
+                    }
+                    
+                    .qr-text {
+                        font-size: 10px;
+                        color: #999;
+                    }
+                    
+                    .print-date {
+                        font-size: 12px;
+                        color: #999;
+                    }
+                    
+                    .summary {
+                        background: #f8f9fa;
+                        padding: 15px;
+                        border-radius: 8px;
+                        margin: 20px 0;
+                        border-left: 4px solid #2c5aa0;
+                    }
+                    
+                    .summary-grid {
+                        display: grid;
+                        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                        gap: 15px;
+                        text-align: center;
+                    }
+                    
+                    .summary-item {
+                        padding: 10px;
+                    }
+                    
+                    .summary-value {
+                        font-size: 24px;
+                        font-weight: 700;
+                        color: #2c5aa0;
+                    }
+                    
+                    .summary-label {
+                        font-size: 12px;
+                        color: #666;
+                        margin-top: 5px;
+                    }
+                    
+                    @media print {
+                        body {
+                            padding: 15px;
+                        }
+                        
+                        .container {
+                            max-width: none;
+                        }
+                        
+                        .students-table {
+                            box-shadow: none;
+                        }
+                        
+                        .class-info {
+                            box-shadow: none;
+                        }
+                    }
+                    
+                    .watermark {
+                        position: fixed;
+                        top: 50%;
+                        left: 50%;
+                        transform: translate(-50%, -50%) rotate(-45deg);
+                        font-size: 120px;
+                        color: rgba(0,0,0,0.03);
+                        font-weight: 700;
+                        z-index: -1;
+                        pointer-events: none;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="watermark">${classObj.school?.name || 'أكاديمية الرواد'}</div>
+                
+                <div class="container">
+                    <div class="header">
+                        <div class="school-info">
+                            <div class="school-name">${classObj.school?.name || 'أكاديمية الرواد للتعليم والمعارف'}</div>
+                            <div class="school-subtitle">مؤسسة تعليمية متخصصة في تقديم أفضل البرامج التعليمية</div>
+                            <div class="document-title">القائمة الاسمية للطلاب</div>
+                        </div>
+                        
+                        <div class="logo-container">
+                            <img src="assets/rouad.JPG" alt="شعار المدرسة" class="school-logo" 
+                                 onerror="this.style.display='none'; this.parentNode.innerHTML='<div style=\\'text-align:center; padding:20px;\\'><strong>شعار المدرسة</strong></div>';">
+                        </div>
+                    </div>
+                    
+                    <div class="class-info">
+                        <div class="class-info-grid">
+                            <div class="info-item">
+                                <span class="info-label">اسم الحصة</span>
+                                <span class="info-value">${classObj.name}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">المادة الدراسية</span>
+                                <span class="info-value">${classObj.subject || 'غير محدد'}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">السنة الدراسية</span>
+                                <span class="info-value">${getAcademicYearName(classObj.academicYear) || 'غير محدد'}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">الأستاذ</span>
+                                <span class="info-value">${classObj.teacher?.name || 'غير محدد'}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="summary">
+                        <div class="summary-grid">
+                            <div class="summary-item">
+                                <div class="summary-value">${activeStudents.length}</div>
+                                <div class="summary-label">إجمالي عدد الطلاب</div>
+                            </div>
+                            <div class="summary-item">
+                                <div class="summary-value">${classObj.price || 0} د.ج</div>
+                                <div class="summary-label">رسوم الحصة الشهرية</div>
+                            </div>
+                            <div class="summary-item">
+                                <div class="summary-value">${selectedMonth || 'جميع الأشهر'}</div>
+                                <div class="summary-label">الفترة</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <table class="students-table">
+                        <thead>
+                            <tr>
+                                <th width="5%">م</th>
+                                <th width="15%">رقم الطالب</th>
+                                <th width="25%">اسم الطالب</th>
+                                <th width="15%">ولي الأمر</th>
+                                <th width="10%">الصف</th>
+                                <th width="15%">هاتف ولي الأمر</th>
+                                <th width="15%">ملاحظات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${activeStudents.map((student, index) => `
+                                <tr>
+                                    <td>${index + 1}</td>
+                                    <td>
+                                        <span class="student-id">${student.studentId || 'غير محدد'}</span>
+                                    </td>
+                                    <td>
+                                        <span class="student-name">${student.name}</span>
+                                    </td>
+                                    <td>${student.parentName || 'غير مسجل'}</td>
+                                    <td>
+                                        <span class="academic-year">${getAcademicYearName(student.academicYear) || 'غير محدد'}</span>
+                                    </td>
+                                    <td>${student.parentPhone || 'غير مسجل'}</td>
+                                    <td>
+                                        ${student.hasPaidRegistration ? 
+                                            '<span style="color: #28a745;">✓ مسدد</span>' : 
+                                            '<span style="color: #dc3545;">✗ غير مسدد</span>'
+                                        }
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                    
+                    <div class="footer">
+                        <div class="footer-info">
+                            <div class="qr-code">
+                                ${qrCodeSvg}
+                                <div class="qr-text">كود الفصل: ${classObj._id.slice(-8).toUpperCase()}</div>
+                            </div>
+                            
+                            <div style="text-align: center;">
+                                <div style="margin-bottom: 10px;">
+                                    <strong>إدارة أكاديمية الرواد</strong>
+                                </div>
+                                <div style="font-size: 12px; color: #666;">
+                                    الهاتف: 0559581957 | البريد: info@redox.com
+                                </div>
+                            </div>
+                            
+                            <div class="print-date">
+                                تم الطباعة في: ${new Date().toLocaleString('ar-EG', {
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <script>
+                    // طباعة تلقائية بعد تحميل الصفحة
+                    window.onload = function() {
+                        setTimeout(() => {
+                            window.print();
+                        }, 500);
+                    };
+                    
+                    // إغلاق النافذة بعد الطباعة
+                    window.onafterprint = function() {
+                        setTimeout(() => {
+                            window.close();
+                        }, 1000);
+                    };
+                </script>
+            </body>
+            </html>
+        `);
+
+        printWindow.document.close();
+
+    } catch (err) {
+        console.error('Error printing students list:', err);
+        Swal.fire({
+            icon: 'error',
+            title: 'خطأ في الطباعة',
+            text: err.message || 'حدث خطأ أثناء تحضير قائمة الطلاب للطباعة',
+            confirmButtonText: 'حسناً'
+        });
+    }
 };
 
 
@@ -9071,15 +9532,15 @@ async function showStudentDetails(studentId, event = null) {
                                         </td>
                                         <td>${payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('ar-EG') : '-'}</td>
                                         <td>
-                                            ${payment.status !== 'paid' ? `
-                                                <button class="btn btn-sm btn-success" onclick="paySinglePayment('${payment._id}')">
-                                                    دفع
-                                                </button>
-                                            ` : `
-                                                <button class="btn btn-sm btn-info" onclick="reprintPaymentReceipt('${payment._id}')">
-                                                    <i class="bi bi-printer"></i>
-                                                </button>
-                                            `}
+                    ${payment.status === 'paid' ? `
+                    <button class="btn btn-sm btn-info btn-action" onclick="reprintPaymentReceipt('${payment._id}')">
+                        <i class="bi bi-printer"></i>
+                    </button>
+                        <button class="btn btn-sm btn-outline-danger btn-action" onclick="deletePayment('${payment._id}')">
+        <i class="bi bi-trash"></i>
+    </button>
+
+                    ` : ''}
                                         </td>
                                     </tr>
                                 `).join('')}
@@ -12014,3 +12475,336 @@ function displayFinancialReport(report) {
 document.getElementById('accounting-link').addEventListener('click', function() {
     initAccountingSection();
 });
+
+
+// دالة لعرض modal التسجيل في حصص متعددة
+async function showMultiEnrollModal(studentId) {
+    try {
+        // حفظ معرف الطالب في متغير عام
+        window.currentStudentId = studentId;
+        
+        // جلب بيانات الطالب
+        const studentResponse = await fetch(`/api/students/${studentId}`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (studentResponse.status === 401) {
+            logout();
+            return;
+        }
+        
+        const student = await studentResponse.json();
+        
+        // جلب جميع الحصص
+        const classesResponse = await fetch('/api/classes', {
+            headers: getAuthHeaders()
+        });
+        
+        const allClasses = await classesResponse.json();
+
+        // تصفية الحصص المتاحة
+        const availableClasses = allClasses.filter(cls => {
+            const isEnrolled = student.classes?.some(studentClass => 
+                studentClass._id === cls._id || studentClass === cls._id
+            );
+            
+            if (isEnrolled) return false;
+            
+            if (!cls.academicYear || cls.academicYear === 'NS' || cls.academicYear === 'غير محدد') {
+                return true;
+            }
+            
+            return cls.academicYear === student.academicYear;
+        });
+
+        // تعبئة قائمة الحصص
+        const classesChecklist = document.getElementById('classesChecklist');
+        classesChecklist.innerHTML = '';
+
+        if (availableClasses.length === 0) {
+            classesChecklist.innerHTML = `
+                <div class="alert alert-warning text-center">
+                    لا توجد حصص متاحة للتسجيل
+                </div>
+            `;
+            document.getElementById('confirmMultiEnroll').disabled = true;
+        } else {
+            availableClasses.forEach((cls, index) => {
+                const classItem = document.createElement('div');
+                classItem.className = 'form-check mb-2';
+                classItem.innerHTML = `
+                    <input class="form-check-input class-checkbox" type="checkbox" 
+                           value="${cls._id}" id="class-${cls._id}">
+                    <label class="form-check-label w-100" for="class-${cls._id}">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>${cls.name}</strong> - ${cls.subject} 
+                                <span class="text-muted">(${getAcademicYearName(cls.academicYear) || 'جميع المستويات'})</span>
+                            </div>
+                            <span class="badge bg-info">${cls.price} د.ج</span>
+                        </div>
+                        ${cls.schedule && cls.schedule.length > 0 ? `
+                            <div class="schedule-info mt-1">
+                                <small class="text-muted">
+                                    ${cls.schedule.map(s => `${s.day} ${s.time}`).join('، ')}
+                                </small>
+                            </div>
+                        ` : ''}
+                    </label>
+                `;
+                classesChecklist.appendChild(classItem);
+            });
+
+            // تحديث عدد الحصص المختارة
+            updateSelectedClassesCount();
+            
+            // إضافة event listener للcheckboxes
+            const checkboxes = classesChecklist.querySelectorAll('.class-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', updateSelectedClassesCount);
+            });
+        }
+
+        // تحديث عنوان الـ modal
+        const modalTitle = document.querySelector('#multiEnrollModal .modal-title');
+        if (modalTitle) {
+            modalTitle.textContent = `تسجيل الطالب ${student.name} في حصص متعددة`;
+        }
+
+        // تهيئة أحداث الزر قبل فتح الـ modal
+        initializeMultiEnrollEvents();
+        
+        // فتح الـ modal
+        const multiEnrollModal = new bootstrap.Modal(document.getElementById('multiEnrollModal'));
+        multiEnrollModal.show();
+        
+    } catch (error) {
+        console.error('Error showing multi-enroll modal:', error);
+        Swal.fire('خطأ', 'حدث خطأ أثناء تحميل البيانات', 'error');
+    }
+}
+
+
+
+
+
+// دالة تحديث عدد الحصص المختارة
+function updateSelectedClassesCount() {
+    const selectedCount = document.querySelectorAll('.class-checkbox:checked').length;
+    const countElement = document.getElementById('selectedClassesCount');
+    const confirmBtn = document.getElementById('confirmMultiEnroll');
+    
+    if (countElement) {
+        countElement.textContent = selectedCount;
+    }
+    
+    if (confirmBtn) {
+        confirmBtn.disabled = selectedCount === 0;
+        confirmBtn.textContent = selectedCount > 0 ? 
+            `تأكيد التسجيل في ${selectedCount} حصة` : 
+            'تأكيد التسجيل';
+    }
+}
+
+
+// دالة تأكيد التسجيل في الحصص المتعددة
+async function confirmMultiEnrollment() {
+    console.log('تم النقر على زر التأكيد'); // للتأكد من أن الحدث يعمل
+    
+    const selectedCheckboxes = document.querySelectorAll('.class-checkbox:checked');
+    const selectedClasses = Array.from(selectedCheckboxes).map(checkbox => checkbox.value);
+    
+    if (selectedClasses.length === 0) {
+        Swal.fire('تحذير', 'يرجى اختيار حصة واحدة على الأقل', 'warning');
+        return;
+    }
+    
+    // التأكد من وجود معرف الطالب
+    if (!window.currentStudentId) {
+        Swal.fire('خطأ', 'لم يتم تحديد طالب', 'error');
+        return;
+    }
+    
+    try {
+        // إظهار مؤشر التحميل
+        Swal.fire({
+            title: 'جاري التسجيل',
+            html: `جاري تسجيل الطالب في ${selectedClasses.length} حصة...`,
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        // تنفيذ عمليات التسجيل
+        const enrollmentPromises = selectedClasses.map(async (classId) => {
+            try {
+                const response = await fetch(`/api/classes/${classId}/enroll/${window.currentStudentId}`, {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
+                
+                if (response.ok) {
+                    return {
+                        classId: classId,
+                        status: 'success',
+                        data: await response.json()
+                    };
+                } else {
+                    const errorData = await response.json();
+                    return {
+                        classId: classId,
+                        status: 'error',
+                        error: errorData.error || 'فشل في التسجيل'
+                    };
+                }
+            } catch (error) {
+                return {
+                    classId: classId,
+                    status: 'error',
+                    error: error.message
+                };
+            }
+        });
+
+        const enrollmentResults = await Promise.all(enrollmentPromises);
+        
+        // تحليل النتائج
+        const successfulEnrollments = enrollmentResults.filter(result => result.status === 'success');
+        const failedEnrollments = enrollmentResults.filter(result => result.status === 'error');
+        
+        // إغلاق نافذة التحميل
+        Swal.close();
+        
+        // عرض النتائج
+        if (failedEnrollments.length === 0) {
+            Swal.fire({
+                icon: 'success',
+                title: 'تم التسجيل بنجاح',
+                html: `تم تسجيل الطالب في ${successfulEnrollments.length} حصة بنجاح`,
+                confirmButtonText: 'حسناً'
+            }).then(() => {
+                // إغلاق الـ modal بعد النجاح
+                const multiEnrollModal = bootstrap.Modal.getInstance(document.getElementById('multiEnrollModal'));
+                if (multiEnrollModal) {
+                    multiEnrollModal.hide();
+                }
+                
+                // تحديث البيانات
+                refreshDataAfterEnrollment();
+            });
+        } else {
+            let errorMessage = `تم التسجيل في ${successfulEnrollments.length} حصة بنجاح<br>`;
+            errorMessage += `فشل التسجيل في ${failedEnrollments.length} حصة`;
+            
+            if (failedEnrollments.length > 0) {
+                errorMessage += '<br><br><strong>تفاصيل الأخطاء:</strong><br>';
+                failedEnrollments.forEach((error, index) => {
+                    errorMessage += `${index + 1}. ${error.error}<br>`;
+                });
+            }
+            
+            Swal.fire({
+                icon: 'warning',
+                title: 'نتائج التسجيل',
+                html: errorMessage,
+                confirmButtonText: 'حسناً'
+            }).then(() => {
+                // إذا كان هناك نجاحات جزئية، أغلق الـ modal وحدث البيانات
+                if (successfulEnrollments.length > 0) {
+                    const multiEnrollModal = bootstrap.Modal.getInstance(document.getElementById('multiEnrollModal'));
+                    if (multiEnrollModal) {
+                        multiEnrollModal.hide();
+                    }
+                    refreshDataAfterEnrollment();
+                }
+            });
+        }
+        
+    } catch (error) {
+        console.error('Error in multi-enrollment:', error);
+        Swal.fire('خطأ', 'حدث خطأ أثناء عملية التسجيل', 'error');
+    }
+}
+
+function refreshDataAfterEnrollment() {
+    // تحديث modal الطالب إذا كان مفتوحاً
+    if (typeof showStudentDetails === 'function' && window.currentStudentId) {
+        setTimeout(() => {
+            showStudentDetails(window.currentStudentId);
+        }, 1000);
+    }
+    
+    // تحديث قائمة الطلاب
+    if (typeof loadStudents === 'function') {
+        setTimeout(() => {
+            loadStudents();
+        }, 500);
+    }
+}
+
+
+
+async function getClassName(classId) {
+    try {
+        const response = await fetch(`/api/classes/${classId}`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (response.ok) {
+            const classData = await response.json();
+            return classData.name;
+        }
+        return 'حصة غير معروفة';
+    } catch (error) {
+        return 'حصة غير معروفة';
+    }
+}
+
+
+
+// إضافة event listener لزر التأكيد
+document.getElementById('confirmMultiEnroll').addEventListener('click', confirmMultiEnrollment);
+
+document.addEventListener('DOMContentLoaded', function() {
+    // تأكد من وجود الزر في الـ DOM أولاً
+    const modalMultiEnrollBtn = document.getElementById('modalMultiEnrollBtn');
+    if (modalMultiEnrollBtn) {
+        modalMultiEnrollBtn.addEventListener('click', function() {
+            // الحصول على معرف الطالب من الزر أو من متغير عام
+            if (window.currentStudentId) {
+                showMultiEnrollModal(window.currentStudentId);
+            }
+        });
+    }
+
+    // مستحدث حدث لزر تأكيد التسجيل في multiEnrollModal
+    const confirmMultiEnrollBtn = document.getElementById('confirmMultiEnroll');
+    if (confirmMultiEnrollBtn) {
+        confirmMultiEnrollBtn.addEventListener('click', confirmMultiEnrollment);
+    }
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    initializeMultiEnrollEvents();
+});
+
+// إعادة تهيئة الأحداث عند فتح modal التسجيل المتعدد
+document.getElementById('multiEnrollModal').addEventListener('show.bs.modal', function() {
+    initializeMultiEnrollEvents();
+});
+function initializeMultiEnrollEvents() {
+    // إزالة أي مستمعات أحداث موجودة مسبقاً
+    const confirmBtn = document.getElementById('confirmMultiEnroll');
+    if (confirmBtn) {
+        confirmBtn.replaceWith(confirmBtn.cloneNode(true));
+    }
+    
+    // إضافة مستمع الحدث الجديد
+    document.getElementById('confirmMultiEnroll').addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        confirmMultiEnrollment();
+    });
+}
+

@@ -2403,6 +2403,155 @@ app.get('/api/accounting/reports/financial', authenticate(['admin', 'accountant'
     }
   });
 
+  // API للتسجيل الجماعي للطالب في عدة حصص
+// API للتسجيل الجماعي للطالب في عدة حصص
+app.post('/api/students/:studentId/enroll-multiple', authenticate(['admin', 'secretary']), async (req, res) => {
+  try {
+      const { classIds } = req.body;
+      
+      const studentId = req.params.studentId;
+
+      // التحقق من وجود الطالب
+      const student = await Student.findById(studentId);
+      if (!student) {
+          return res.status(404).json({ error: 'الطالب غير موجود' });
+      }
+
+      const results = {
+          successful: [],
+          failed: []
+      };
+
+      // تسجيل الطالب في كل حصة على حدة
+      for (const classId of classIds) {
+          try {
+              const classObj = await Class.findById(classId);
+              if (!classObj) {
+                  results.failed.push({
+                      classId: classId,
+                      error: 'الحصة غير موجودة'
+                  });
+                  continue;
+              }
+
+              // التحقق من توافق السنة الدراسية
+              const isAcademicYearMatch = (
+                  !classObj.academicYear || 
+                  classObj.academicYear === 'NS' || 
+                  classObj.academicYear === 'غير محدد' ||
+                  classObj.academicYear === student.academicYear
+              );
+
+              if (!isAcademicYearMatch) {
+                  results.failed.push({
+                      classId: classId,
+                      className: classObj.name,
+                      error: `عدم تطابق السنة الدراسية (الحصة: ${classObj.academicYear}, الطالب: ${student.academicYear})`
+                  });
+                  continue;
+              }
+
+              // التحقق إذا كان الطالب مسجلاً مسبقاً
+              const isEnrolled = classObj.students.includes(studentId);
+              if (isEnrolled) {
+                  results.failed.push({
+                      classId: classId,
+                      className: classObj.name,
+                      error: 'الطالب مسجل مسبقاً في هذه الحصة'
+                  });
+                  continue;
+              }
+
+              // إضافة الطالب للحصة
+              classObj.students.push(studentId);
+              await classObj.save();
+
+              // إضافة الحصة للطالب
+              if (!student.classes.includes(classId)) {
+                  student.classes.push(classId);
+              }
+
+              // إنشاء مدفوعات شهرية
+              const enrollmentDate = new Date();
+              const currentDate = moment();
+              const endDate = currentDate.clone().add(1, 'year');
+
+              const months = [];
+              let currentDateIter = moment(enrollmentDate);
+
+              while (currentDateIter.isBefore(endDate)) {
+                  months.push(currentDateIter.format('YYYY-MM'));
+                  currentDateIter.add(1, 'month');
+              }
+
+              for (const month of months) {
+                  const paymentExists = await Payment.findOne({
+                      student: studentId,
+                      class: classId,
+                      month
+                  });
+
+                  if (!paymentExists) {
+                      const payment = new Payment({
+                          student: studentId,
+                          class: classId,
+                          amount: classObj.price,
+                          month,
+                          status: moment(month).isBefore(currentDate, 'month') ? 'late' : 'pending',
+                          recordedBy: req.user.id
+                      });
+
+                      await payment.save();
+
+                      // تسجيل المعاملة المالية
+                      const transaction = new FinancialTransaction({
+                          type: 'income',
+                          amount: classObj.price,
+                          description: `دفعة شهرية متوقعة لطالب ${student.name} في حصة ${classObj.name} لشهر ${month}`,
+                          category: 'tuition',
+                          recordedBy: req.user.id,
+                          reference: payment._id
+                      });
+                      await transaction.save();
+                  }
+              }
+
+              results.successful.push({
+                  classId: classId,
+                  className: classObj.name,
+                  message: 'تم التسجيل بنجاح'
+              });
+
+          } catch (error) {
+              results.failed.push({
+                  classId: classId,
+                  error: error.message
+              });
+          }
+      }
+
+      // حفظ التغييرات على الطالب
+      await student.save();
+
+      res.json({
+          message: `تم معالجة ${classIds.length} حصة`,
+          student: {
+              id: student._id,
+              name: student.name
+          },
+          results: results,
+          summary: {
+              total: classIds.length,
+              successful: results.successful.length,
+              failed: results.failed.length
+          }
+      });
+
+  } catch (err) {
+      res.status(500).json({ error: err.message });
+  }
+});
+
   // Attendance
   app.get('/api/attendance', authenticate(['admin', 'secretary', 'teacher']), async (req, res) => {
     try {
@@ -5008,6 +5157,8 @@ app.post('/api/students/:id/pay-registration', authenticate(['admin', 'secretary
     res.status(500).json({ error: err.message });
   }
 });
+
+
 
   // Teacher Payments (70% of class fees)
   app.get('/api/accounting/teacher-payments', authenticate(['admin', 'accountant']), async (req, res) => {

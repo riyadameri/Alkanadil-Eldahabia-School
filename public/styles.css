@@ -1,4 +1,88 @@
 
+/* إصلاح مشكلة aria-hidden في المودال */
+/* تنسيقات إضافية */
+.class-checkbox:checked + label {
+  background-color: #e8f5e8;
+  border-radius: 4px;
+  padding: 5px;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.selected-count {
+  font-weight: bold;
+}
+
+#classesChecklist {
+  border: 1px solid #dee2e6;
+  border-radius: 5px;
+}
+
+.form-check-label {
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 3px;
+  transition: background-color 0.2s;
+}
+
+.form-check-label:hover {
+  background-color: #f8f9fa;
+}
+.modal[aria-hidden="true"] {
+  display: none !important;
+}
+
+.modal[aria-hidden="false"] {
+  display: block !important;
+}
+
+/* التأكد من أن العناصر داخل المودال لا تفقد التركيز */
+.modal.show {
+  pointer-events: auto;
+}
+/* تنسيقات إضافية */
+.class-checkbox:checked + label {
+  background-color: #e8f5e8;
+  border-radius: 4px;
+  padding: 5px;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.selected-count {
+  font-weight: bold;
+}
+
+#classesChecklist {
+  border: 1px solid #dee2e6;
+  border-radius: 5px;
+}
+
+.form-check-label {
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 3px;
+  transition: background-color 0.2s;
+}
+
+.form-check-label:hover {
+  background-color: #f8f9fa;
+}
+
 .class-attendance-popup .swal2-popup {
   max-width: 95vw !important;
 }
