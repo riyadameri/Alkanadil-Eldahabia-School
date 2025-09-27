@@ -1358,49 +1358,55 @@ async function loadStudents() {
     }
 }
 async function payRegistrationFee(studentId) {
-  try {
-    const { isConfirmed } = await Swal.fire({
-      title: 'دفع حقوق التسجيل',
-      text: 'هل تريد دفع حقوق التسجيل بقيمة 600 دج؟',
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: 'نعم، دفع',
-      cancelButtonText: 'إلغاء'
-    });
+    try {
+        const { isConfirmed } = await Swal.fire({
+            title: 'دفع حقوق التسجيل',
+            text: 'هل تريد دفع حقوق التسجيل بقيمة 600 دج؟',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'نعم، دفع',
+            cancelButtonText: 'إلغاء'
+        });
 
-    if (!isConfirmed) return;
+        if (!isConfirmed) return;
 
-    const response = await fetch(`/api/students/${studentId}/pay-registration`, {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({
-        amount: 600,
-        paymentDate: new Date().toISOString(),
-        paymentMethod: 'cash'
-      })
-    });
+        const response = await fetch(`/api/students/${studentId}/pay-registration`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                amount: 600,
+                paymentDate: new Date().toISOString(),
+                paymentMethod: 'cash'
+            })
+        });
 
-    if (response.ok) {
-      const result = await response.json();
-      
-      // طباعة الإيصال
-      await printRegistrationReceipt(result.student, 600, result.receiptNumber);
-      
-      Swal.fire('نجاح', 'تم دفع حقوق التسجيل بنجاح', 'success');
-      
-      // تحديث قائمة الطلاب - التأكد من استدعاء الدالة بشكل صحيح
-      await loadStudents(); // إضافة await للتأكد من اكتمال التحميل
-      
-      // يمكنك أيضاً إضافة تحديث يدوي للصف إذا لزم الأمر
-      updateStudentRowInUI(studentId, true);
-    } else {
-      const error = await response.json();
-      throw new Error(error.error || 'فشل في عملية الدفع');
+        if (response.ok) {
+            const result = await response.json();
+            
+            // تسجيل رسوم التسجيل كمعاملة مالية
+            await recordRegistrationTransaction(studentId, result.student.name, 600);
+            
+            // طباعة الإيصال
+            await printRegistrationReceipt(result.student, 600, result.receiptNumber);
+            
+            Swal.fire('نجاح', 'تم دفع حقوق التسجيل بنجاح', 'success');
+            
+            // تحديث قائمة الطلاب
+            await loadStudents();
+            
+            // تحديث الإحصائيات المالية
+            await calculateDailyIncome();
+            
+            // تحديث صف الطالب في الواجهة
+            updateStudentRowInUI(studentId, true);
+        } else {
+            const error = await response.json();
+            throw new Error(error.error || 'فشل في عملية الدفع');
+        }
+    } catch (err) {
+        console.error('Error paying registration fee:', err);
+        Swal.fire('خطأ', err.message, 'error');
     }
-  } catch (err) {
-    console.error('Error paying registration fee:', err);
-    Swal.fire('خطأ', err.message, 'error');
-  }
 }
 
 
@@ -12073,49 +12079,40 @@ async function printAttendanceSheet(liveClassId) {
 function initAccountingSection() {
     loadAccountingData();
     setupAccountingEventListeners();
+    startAccountingAutoRefresh();
     
-    // Set default date to today for expense form
+    // تعيين التاريخ الافتراضي لنماذج الإضافة
     document.getElementById('expenseDate').value = new Date().toISOString().split('T')[0];
 }
+
+// إضافة مستمع حدث لقسم المحاسبة
+document.getElementById('accounting-link').addEventListener('click', function() {
+    initAccountingSection();
+});
+
 
 // Load accounting data
 async function loadAccountingData() {
     try {
-    // Load balance data
-    const balanceResponse = await fetch('/api/accounting/balance', {
-        headers: getAuthHeaders()
-    });
-    
-    if (balanceResponse.ok) {
-        const balanceData = await balanceResponse.json();
-        updateBalanceUI(balanceData);
-    }
-    
-    // Load today's stats
-    const todayStatsResponse = await fetch('/api/accounting/today-stats', {
-        headers: getAuthHeaders()
-    });
-    
-    if (todayStatsResponse.ok) {
-        const todayStats = await todayStatsResponse.json();
-        updateTodayStatsUI(todayStats);
-    }
-    
-    // Load transactions
-    const transactionsResponse = await fetch('/api/accounting/transactions?limit=50', {
-        headers: getAuthHeaders()
-    });
-    
-    if (transactionsResponse.ok) {
-        const transactions = await transactionsResponse.json();
-        renderTransactionsTable(transactions);
-    }
-    
+        // حساب الدخل اليومي أولاً
+        await calculateDailyIncome();
+        
+        // تحميل آخر المعاملات
+        const transactionsResponse = await fetch('/api/accounting/transactions?limit=50', {
+            headers: getAuthHeaders()
+        });
+        
+        if (transactionsResponse.ok) {
+            const transactions = await transactionsResponse.json();
+            renderTransactionsTable(transactions);
+        }
+        
     } catch (err) {
-    console.error('Error loading accounting data:', err);
-    Swal.fire('خطأ', 'حدث خطأ أثناء تحميل بيانات المحاسبة', 'error');
+        console.error('Error loading accounting data:', err);
+        Swal.fire('خطأ', 'حدث خطأ أثناء تحميل بيانات المحاسبة', 'error');
     }
 }
+
 
 // Update balance UI
 function updateBalanceUI(balanceData) {
@@ -12146,36 +12143,45 @@ function renderTransactionsTable(transactions) {
     tableBody.innerHTML = '';
     
     if (transactions.length === 0) {
-    tableBody.innerHTML = `
-        <tr>
-        <td colspan="7" class="text-center py-4 text-muted">لا توجد معاملات مسجلة</td>
-        </tr>
-    `;
-    return;
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center py-4 text-muted">لا توجد معاملات مسجلة</td>
+            </tr>
+        `;
+        return;
     }
     
     transactions.forEach((transaction, index) => {
-    const row = document.createElement('tr');
-    
-    const typeBadge = transaction.type === 'income' ? 
-        '<span class="badge bg-success">إيراد</span>' : 
-        '<span class="badge bg-danger">مصروف</span>';
-    
-    row.innerHTML = `
-        <td>${new Date(transaction.date).toLocaleDateString('ar-EG')}</td>
-        <td>${typeBadge}</td>
-        <td>${transaction.description || 'لا يوجد وصف'}</td>
-        <td>${transaction.amount} د.ج</td>
-        <td>${transaction.category || 'عام'}</td>
-        <td>${transaction.recordedBy?.username || 'نظام'}</td>
-        <td>
-        <button class="btn btn-sm btn-outline-info" onclick="viewTransactionDetails('${transaction._id}')">
-            <i class="bi bi-eye"></i>
-        </button>
-        </td>
-    `;
-    tableBody.appendChild(row);
+        const row = document.createElement('tr');
+        
+        const typeBadge = transaction.type === 'income' ? 
+            '<span class="badge bg-success">إيراد</span>' : 
+            '<span class="badge bg-danger">مصروف</span>';
+        
+        row.innerHTML = `
+            <td>${new Date(transaction.date).toLocaleDateString('ar-EG')}</td>
+            <td>${typeBadge}</td>
+            <td>${transaction.description || 'لا يوجد وصف'}</td>
+            <td>${transaction.amount} د.ج</td>
+            <td>${transaction.category || 'عام'}</td>
+            <td>${transaction.recordedBy?.username || 'نظام'}</td>
+            <td>
+                <button class="btn btn-sm btn-outline-info" onclick="viewTransactionDetails('${transaction._id}')">
+                    <i class="bi bi-eye"></i>
+                </button>
+            </td>
+        `;
+        tableBody.appendChild(row);
     });
+}
+
+
+function startAccountingAutoRefresh() {
+    setInterval(() => {
+        if (document.getElementById('accounting').classList.contains('active')) {
+            calculateDailyIncome();
+        }
+    }, 60000); // تحديث كل دقيقة
 }
 
 // Load recipients for expense form
@@ -12806,4 +12812,95 @@ function initializeMultiEnrollEvents() {
         e.stopPropagation();
         confirmMultiEnrollment();
     });
+}
+
+
+
+async function calculateDailyIncome() {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        
+        // جلب المدفوعات المحصلة لهذا اليوم (حالة paid فقط)
+        const paymentsResponse = await fetch(`/api/payments?date=${today}&status=paid`, {
+            headers: getAuthHeaders()
+        });
+        
+        // جلب رسوم التسجيل المحصلة لهذا اليوم
+        const registrationFeesResponse = await fetch(`/api/accounting/transactions?date=${today}&category=registration`, {
+            headers: getAuthHeaders()
+        });
+        
+        // جلب المصاريف المسجلة لهذا اليوم
+        const expensesResponse = await fetch(`/api/accounting/expenses?date=${today}`, {
+            headers: getAuthHeaders()
+        });
+        
+        let dailyIncome = 0;
+        let dailyExpenses = 0;
+        
+        // حساب الدخل من المدفوعات المحصلة فقط
+        if (paymentsResponse.ok) {
+            const payments = await paymentsResponse.json();
+            dailyIncome = payments.reduce((total, payment) => total + payment.amount, 0);
+        }
+        
+        // إضافة رسوم التسجيل إلى الدخل اليومي
+        if (registrationFeesResponse.ok) {
+            const registrationFees = await registrationFeesResponse.json();
+            const registrationIncome = registrationFees.reduce((total, fee) => total + fee.amount, 0);
+            dailyIncome += registrationIncome;
+        }
+        
+        // حساب المصاريف الفعلية
+        if (expensesResponse.ok) {
+            const expenses = await expensesResponse.json();
+            dailyExpenses = expenses.reduce((total, expense) => total + expense.amount, 0);
+        }
+        
+        // تحديث واجهة المستخدم
+        document.getElementById('dailyIncome').textContent = `${dailyIncome} د.ج`;
+        document.getElementById('dailyExpenses').textContent = `${dailyExpenses} د.ج`;
+        
+        // تحديث التاريخ
+        const todayFormatted = new Date().toLocaleDateString('ar-EG', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+        
+        document.getElementById('dailyIncomeDate').textContent = todayFormatted;
+        document.getElementById('dailyExpensesDate').textContent = todayFormatted;
+        
+    } catch (err) {
+        console.error('Error calculating daily income:', err);
+    }
+}
+
+async function recordRegistrationTransaction(studentId, studentName, amount) {
+    try {
+        const transactionData = {
+            type: 'income',
+            amount: amount,
+            description: `رسوم تسجيل الطالب: ${studentName}`,
+            category: 'registration',
+            date: new Date().toISOString(),
+            reference: `STU-${studentId}`
+        };
+
+        const response = await fetch('/api/accounting/transactions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeaders()
+            },
+            body: JSON.stringify(transactionData)
+        });
+
+        if (!response.ok) {
+            console.error('Failed to record registration transaction');
+        }
+    } catch (err) {
+        console.error('Error recording registration transaction:', err);
+    }
 }

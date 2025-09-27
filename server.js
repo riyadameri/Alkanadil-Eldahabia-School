@@ -220,14 +220,15 @@ require('dotenv').config();
     amount: { type: Number, required: true },
     description: String,
     category: { 
-      type: String, 
-      enum: ['tuition', 'salary', 'rent', 'utilities', 'supplies', 'other', 'registration'], // أضف 'registration' هنا
-      required: true 
+        type: String, 
+        enum: ['tuition', 'salary', 'rent', 'utilities', 'supplies', 'other', 'registration'],
+        required: true 
     },
     date: { type: Date, default: Date.now },
     recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    reference: String
-  });
+    reference: String,
+    student: { type: mongoose.Schema.Types.ObjectId, ref: 'Student' } // إضافة مرجع للطالب
+});
   // Add this near other schemas
   const liveClassSchema = new mongoose.Schema({
     class: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: true },
@@ -975,15 +976,7 @@ const validateObjectId = (req, res, next) => {
         });
         await schoolFee.save();
         
-        const transaction = new FinancialTransaction({
-          type: 'income',
-          amount: schoolFee.amount,
-          description: `رسوم تسجيل الطالب ${student.name}`,
-          category: 'registration',
-          recordedBy: req.user.id,
-          reference: schoolFee._id
-        });
-        await transaction.save();
+  
       }
       
       res.status(201).json({
@@ -5871,12 +5864,13 @@ app.get('/api/classes/count', async (req, res) => {
 
 
 // Add the missing transactions endpoint
-app.get('/api/accounting/transactions', authenticate(['admin', 'accountant']), async (req, res) => {
+app.get('/api/accounting/transactions', async (req, res) => {
   try {
-      const { limit = 50, type, startDate, endDate } = req.query;
+      const { limit = 1000, type, category, startDate, endDate } = req.query;
       const query = {};
       
       if (type) query.type = type;
+      if (category) query.category = category;
       if (startDate || endDate) {
           query.date = {};
           if (startDate) query.date.$gte = new Date(startDate);
@@ -5885,12 +5879,266 @@ app.get('/api/accounting/transactions', authenticate(['admin', 'accountant']), a
       
       const transactions = await FinancialTransaction.find(query)
           .populate('recordedBy')
+          .populate('student')
           .sort({ date: -1 })
           .limit(parseInt(limit));
       
       res.json(transactions);
   } catch (err) {
       res.status(500).json({ error: err.message });
+  }
+});
+
+
+// حساب مدخول اليوم
+// حساب مدخول اليوم - الإصدار المصحح
+app.get('/api/accounting/daily-income',  async (req, res) => {
+  try {
+    const { date } = req.query;
+    
+    // استخدام التاريخ المحدد أو تاريخ اليوم
+    let targetDate;
+    if (date) {
+      targetDate = new Date(date);
+    } else {
+      targetDate = new Date();
+    }
+    
+    targetDate.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(targetDate);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    console.log(`بحث عن دخل يوم: ${targetDate} إلى ${tomorrow}`);
+
+    // 1. حساب مدفوعات الحصص اليومية
+    const dailyPayments = await Payment.aggregate([
+      {
+        $match: {
+          paymentDate: {
+            $gte: targetDate,
+            $lt: tomorrow
+          },
+          status: 'paid'
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$amount' },
+          count: { $sum: 1 },
+          payments: { $push: '$$ROOT' }
+        }
+      }
+    ]);
+
+    // 2. حساب رسوم التسجيل المدفوعة اليوم
+    const dailySchoolFees = await SchoolFee.aggregate([
+      {
+        $match: {
+          paymentDate: {
+            $gte: targetDate,
+            $lt: tomorrow
+          },
+          status: 'paid'
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$amount' },
+          count: { $sum: 1 },
+          fees: { $push: '$$ROOT' }
+        }
+      }
+    ]);
+
+    // 3. حساب الإيرادات الأخرى من المعاملات المالية
+    const dailyTransactions = await FinancialTransaction.aggregate([
+      {
+        $match: {
+          date: {
+            $gte: targetDate,
+            $lt: tomorrow
+          },
+          type: 'income'
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$amount' },
+          count: { $sum: 1 },
+          transactions: { $push: '$$ROOT' }
+        }
+      }
+    ]);
+
+    const paymentsTotal = dailyPayments[0]?.total || 0;
+    const feesTotal = dailySchoolFees[0]?.total || 0;
+    const otherIncomeTotal = dailyTransactions[0]?.total || 0;
+    const totalIncome = paymentsTotal + feesTotal + otherIncomeTotal;
+
+    // الحصول على تفاصيل إضافية للعرض
+    const paymentDetails = await Payment.find({
+      paymentDate: { $gte: targetDate, $lt: tomorrow },
+      status: 'paid' 
+    }).populate('student').populate('class').limit(10);
+
+    const feeDetails = await SchoolFee.find({
+      paymentDate: { $gte: targetDate, $lt: tomorrow },
+      status: 'paid'
+    }).populate('student').limit(10);
+
+    res.json({
+      success: true,
+      dailyIncome: totalIncome,
+      date: targetDate.toISOString().split('T')[0],
+      formattedDate: targetDate.toLocaleDateString('ar-EG'),
+      breakdown: {
+        payments: {
+          amount: paymentsTotal,
+          count: dailyPayments[0]?.count || 0,
+          details: paymentDetails
+        },
+        registrationFees: {
+          amount: feesTotal,
+          count: dailySchoolFees[0]?.count || 0,
+          details: feeDetails
+        },
+        otherIncome: {
+          amount: otherIncomeTotal,
+          count: dailyTransactions[0]?.count || 0
+        }
+      },
+      summary: {
+        totalAmount: totalIncome,
+        totalTransactions: (dailyPayments[0]?.count || 0) + 
+                          (dailySchoolFees[0]?.count || 0) + 
+                          (dailyTransactions[0]?.count || 0)
+      }
+    });
+
+  } catch (err) {
+    console.error('Error in daily-income endpoint:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message,
+      dailyIncome: 0
+    });
+  }
+});
+app.get('/api/accounting/weekly-income', authenticate(['admin', 'accountant']), async (req, res) => {
+  try {
+      const today = new Date();
+      const startOfWeek = new Date(today);
+      startOfWeek.setDate(today.getDate() - today.getDay()); // الأحد كبداية الأسبوع
+      
+      const weeklyIncome = [];
+      let totalWeeklyIncome = 0;
+      
+      // حساب الدخل لكل يوم من أيام الأسبوع
+      for (let i = 0; i < 7; i++) {
+          const currentDate = new Date(startOfWeek);
+          currentDate.setDate(startOfWeek.getDate() + i);
+          
+          const dayIncome = await calculateDailyIncome(currentDate.toISOString().split('T')[0]);
+          weeklyIncome.push({
+              date: currentDate.toISOString().split('T')[0],
+              dayName: currentDate.toLocaleDateString('ar-EG', { weekday: 'long' }),
+              income: dayIncome.dailyIncome
+          });
+          
+          totalWeeklyIncome += dayIncome.dailyIncome;
+      }
+      
+      res.json({
+          weeklyIncome,
+          totalWeeklyIncome,
+          startDate: startOfWeek.toISOString().split('T')[0],
+          endDate: today.toISOString().split('T')[0]
+      });
+  } catch (error) {
+      res.status(500).json({ error: 'فشل في حساب الدخل الأسبوعي' });
+  }
+});
+
+// دالة إضافية للحصول على إحصائيات الدخل للشهر الحالي
+app.get('/api/accounting/monthly-income', authenticate(['admin', 'accountant']), async (req, res) => {
+  try {
+      const today = new Date();
+      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      
+      // حساب الدخل الشهري
+      const monthlyResult = await Payment.aggregate([
+          {
+              $match: {
+                  paymentDate: {
+                      $gte: startOfMonth,
+                      $lte: endOfMonth
+                  },
+                  status: 'paid'
+              }
+          },
+          {
+              $group: {
+                  _id: null,
+                  totalPayments: { $sum: '$amount' }
+              }
+          }
+      ]);
+      
+      const feesResult = await SchoolFee.aggregate([
+          {
+              $match: {
+                  paymentDate: {
+                      $gte: startOfMonth,
+                      $lte: endOfMonth
+                  },
+                  status: 'paid'
+              }
+          },
+          {
+              $group: {
+                  _id: null,
+                  totalFees: { $sum: '$amount' }
+              }
+          }
+      ]);
+      
+      const otherIncomeResult = await FinancialTransaction.aggregate([
+          {
+              $match: {
+                  date: {
+                      $gte: startOfMonth,
+                      $lte: endOfMonth
+                  },
+                  type: 'income',
+                  category: { $ne: 'tuition' }
+              }
+          },
+          {
+              $group: {
+                  _id: null,
+                  totalOther: { $sum: '$amount' }
+              }
+          }
+      ]);
+      
+      const totalMonthlyIncome = 
+          (monthlyResult[0]?.totalPayments || 0) +
+          (feesResult[0]?.totalFees || 0) +
+          (otherIncomeResult[0]?.totalOther || 0);
+      
+      res.json({
+          totalMonthlyIncome,
+          payments: monthlyResult[0]?.totalPayments || 0,
+          fees: feesResult[0]?.totalFees || 0,
+          otherIncome: otherIncomeResult[0]?.totalOther || 0,
+          month: today.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long' })
+      });
+  } catch (error) {
+      res.status(500).json({ error: 'فشل في حساب الدخل الشهري' });
   }
 });
 
