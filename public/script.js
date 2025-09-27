@@ -1410,9 +1410,61 @@ async function payRegistrationFee(studentId) {
 }
 
 
+// دالة للتحميل المتقطع للبيانات
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
 
+// تحسين تحميل الطلاب
+const optimizedLoadStudents = debounce(async function() {
+    try {
+        const response = await fetch('/api/students', {
+            headers: getAuthHeaders()
+        });
+        
+        if (response.ok) {
+            const students = await response.json();
+            updateStudentsTable(students);
+        }
+    } catch (err) {
+        console.error('Error loading students:', err);
+    }
+}, 300);
 
+// تحديث الجدول فقط بدون إعادة تحميل كامل
+function updateStudentsTable(students) {
+    const tableBody = document.getElementById('studentsTable');
+    if (!tableBody) return;
+    
+    tableBody.innerHTML = '';
+    
+    students.forEach((student, index) => {
+        const row = document.createElement('tr');
+        // ... كود إنشاء الصفوف كما هو
+        tableBody.appendChild(row);
+    });
+    
+    document.getElementById('studentsCount').textContent = students.length;
+}
 
+// تنظيف الـ event listeners عند إغلاق المودال
+document.getElementById('addStudentModal').addEventListener('hidden.bs.modal', function() {
+    // إعادة تعيين النموذج
+    document.getElementById('addStudentForm').reset();
+    
+    // إعادة حالة الزر
+    const saveBtn = document.getElementById('saveStudentBtn');
+    saveBtn.disabled = false;
+    saveBtn.innerHTML = '<i class="bi bi-save me-1"></i>حفظ الطالب';
+});
 function updateStudentRowInUI(studentId, hasPaid) {
     const rows = document.querySelectorAll('#studentsTable tr');
     rows.forEach(row => {
@@ -2561,22 +2613,32 @@ function getAcademicYearName(code) {
 }
 // Form submission handlers
 document.getElementById('saveStudentBtn').addEventListener('click', async () => {
-    const studentData = {
-        name: document.getElementById('studentName').value,
-        studentId: 'STU-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
-        birthDate: document.getElementById('birthDate').value,
-        parentName: document.getElementById('parentName').value,
-        parentPhone: document.getElementById('parentPhone').value,
-        academicYear: document.getElementById('academicYear').value,
-        registrationDate: document.getElementById('registrationDate').value || new Date(),
-        active: 'true',
-        status: 'active',
-        hasPaidRegistration: false // إضافة هذا الحقل
-    };
-
-
-
+    const saveBtn = document.getElementById('saveStudentBtn');
+    const originalText = saveBtn.innerHTML;
+    
     try {
+        // تعطيل الزر وإظهار حالة التحميل
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>جاري الحفظ...';
+        
+        const studentData = {
+            name: document.getElementById('studentName').value,
+            studentId: 'STU-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+            birthDate: document.getElementById('birthDate').value,
+            parentName: document.getElementById('parentName').value,
+            parentPhone: document.getElementById('parentPhone').value,
+            academicYear: document.getElementById('academicYear').value,
+            registrationDate: document.getElementById('registrationDate').value || new Date(),
+            active: 'true',
+            status: 'active',
+            hasPaidRegistration: false
+        };
+
+        // التحقق من الحقول المطلوبة
+        if (!studentData.name || !studentData.parentName) {
+            throw new Error('الاسم واسم ولي الأمر حقلان مطلوبان');
+        }
+
         const response = await fetch('/api/students', {
             method: 'POST',
             headers: getAuthHeaders(),
@@ -2588,39 +2650,54 @@ document.getElementById('saveStudentBtn').addEventListener('click', async () => 
             return;
         }
 
-        if (response.ok) {
-            const newStudent = await response.json();
-            
-            // Close the modal first
-            bootstrap.Modal.getInstance(document.getElementById('addStudentModal')).hide();
-            
-            // Show success message
-            await Swal.fire({
-                title: 'نجاح',
-                text: 'تم إضافة الطالب بنجاح',
-                icon: 'success',
-                timer: 1000,
-                showConfirmButton: false
-            });
-
-            // RESET THE FORM HERE
-            document.getElementById('addStudentForm').reset();
-            
-            // Print receipt automatically
-            await printRegistrationReceipt(newStudent, 600);
-
-            // Refresh data
-            loadStudents();
-            loadStudentsForPayments();
-            loadStudentsForCards();
-            
-        } else {
+        if (!response.ok) {
             const error = await response.json();
-            Swal.fire('خطأ', error.error || 'حدث خطأ أثناء إضافة الطالب', 'error');
+            throw new Error(error.error || 'حدث خطأ أثناء إضافة الطالب');
         }
+
+        const newStudent = await response.json();
+        
+        // إغلاق المودال أولاً
+        const studentModal = bootstrap.Modal.getInstance(document.getElementById('addStudentModal'));
+        if (studentModal) {
+            studentModal.hide();
+        }
+
+        // رسالة نجاح سريعة
+        await Swal.fire({
+            title: 'نجاح',
+            text: 'تم إضافة الطالب بنجاح',
+            icon: 'success',
+            timer: 1000,
+            showConfirmButton: false
+        });
+
+        // إعادة تعيين النموذج
+        document.getElementById('addStudentForm').reset();
+        
+
+
+        // تحديث البيانات الأساسية فقط
+        setTimeout(() => {
+            loadStudents();
+            if (document.getElementById('students').classList.contains('active')) {
+                loadStudentsForPayments();
+                loadStudentsForCards();
+            }
+        }, 500);
+
     } catch (err) {
         console.error('Error:', err);
-        Swal.fire('خطأ', 'حدث خطأ أثناء الاتصال بالخادم', 'error');
+        Swal.fire({
+            icon: 'error',
+            title: 'خطأ',
+            text: err.message || 'حدث خطأ أثناء الاتصال بالخادم',
+            confirmButtonText: 'حسناً'
+        });
+    } finally {
+        // إعادة تمكين الزر بغض النظر عن النتيجة
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalText;
     }
 });
 document.getElementById('saveTeacherBtn').addEventListener('click', async () => {
@@ -8569,137 +8646,73 @@ function updateClassesTable(classes) {
 
 
 async function printRegistrationReceipt(studentData, amount = 600) {
-    // تحديد نوع الإيصال (تسجيل أو شهري)
-    const isRegistrationReceipt = amount === 600;
-    
     return new Promise((resolve) => {
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        document.body.appendChild(iframe);
-        
-        const doc = iframe.contentWindow.document;
-        
-        doc.open();
-        doc.write(`
-            <!DOCTYPE html>
-            <html lang="ar" dir="rtl">
-            <head>
-                <meta charset="UTF-8">
-                <title>${isRegistrationReceipt ? 'إيصال تسجيل طالب' : 'إيصال دفع شهري'}</title>
-                <style>
-                    /* أنماط الطباعة */
-                    body {
-                        font-family: 'Arial', sans-serif;
-                        margin: 0;
-                        padding: 20px;
-                        color: #333;
-                    }
-                    .receipt-header {
-                        text-align: center;
-                        margin-bottom: 20px;
-                        border-bottom: 2px solid #3498db;
-                        padding-bottom: 10px;
-                    }
-                    .receipt-title {
-                        font-size: 24px;
-                        font-weight: bold;
-                        color: #2c3e50;
-                    }
-                    .receipt-details {
-                        margin: 20px 0;
-                    }
-                    .detail-row {
-                        display: flex;
-                        justify-content: space-between;
-                        margin-bottom: 10px;
-                    }
-                    .detail-label {
-                        font-weight: bold;
-                    }
-                    .amount-section {
-                        text-align: center;
-                        margin: 30px 0;
-                        padding: 15px;
-                        background-color: #f8f9fa;
-                        border-radius: 5px;
-                    }
-                    .amount {
-                        font-size: 28px;
-                        font-weight: bold;
-                        color: #e74c3c;
-                    }
-                    .footer {
-                        text-align: center;
-                        margin-top: 30px;
-                        font-size: 14px;
-                        color: #7f8c8d;
-                    }
-                    @media print {
-                        body {
-                            width: 80mm;
-                            margin: 0;
-                            padding: 10px;
-                        }
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="receipt-header">
-                    <div class="receipt-title">${isRegistrationReceipt ? 'إيصال تسجيل طالب' : 'إيصال دفع شهري'}</div>
-                    <div>أكاديمية الرواد للتعليم والمعارف</div>
-                </div>
-                
-                <div class="receipt-details">
+        // استخدام setTimeout لتجنب حظر الواجهة
+        setTimeout(() => {
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            document.body.appendChild(iframe);
+            
+            const doc = iframe.contentWindow.document;
+            
+            doc.open();
+            doc.write(`
+                <!DOCTYPE html>
+                <html lang="ar" dir="rtl">
+                <head>
+                    <meta charset="UTF-8">
+                    <title>إيصال تسجيل طالب</title>
+                    <style>
+                        body { font-family: Arial; margin: 0; padding: 10px; }
+                        .receipt-header { text-align: center; margin-bottom: 10px; }
+                        .receipt-title { font-size: 18px; font-weight: bold; }
+                        .detail-row { display: flex; justify-content: space-between; margin: 5px 0; }
+                        .amount { font-size: 20px; font-weight: bold; text-align: center; margin: 10px 0; }
+                        @media print { body { width: 80mm; margin: 0; padding: 5px; } }
+                    </style>
+                </head>
+                <body>
+                    <div class="receipt-header">
+                        <div class="receipt-title">إيصال تسجيل طالب</div>
+                        <div>أكاديمية الرواد</div>
+                    </div>
+                    
                     <div class="detail-row">
-                        <span class="detail-label">اسم الطالب:</span>
+                        <span>اسم الطالب:</span>
                         <span>${studentData.name}</span>
                     </div>
                     <div class="detail-row">
-                        <span class="detail-label">رقم الطالب:</span>
+                        <span>رقم الطالب:</span>
                         <span>${studentData.studentId}</span>
                     </div>
                     <div class="detail-row">
-                        <span class="detail-label">ولي الأمر:</span>
-                        <span>${studentData.parentName || 'غير محدد'}</span>
+                        <span>المبلغ:</span>
+                        <span>${amount} د.ج</span>
                     </div>
-                    <div class="detail-row">
-                        <span class="detail-label">نوع الدفع:</span>
-                        <span>${isRegistrationReceipt ? 'حقوق التسجيل' : 'الدفع الشهري'}</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">التاريخ:</span>
-                        <span>${new Date().toLocaleDateString('ar-EG')}</span>
-                    </div>
-                </div>
-                
-                <div class="amount-section">
-                    <div>المبلغ المدفوع</div>
+                    
                     <div class="amount">${amount} دينار جزائري</div>
-                    <div>(${convertNumberToArabicWords(amount)} ديناراً فقط لا غير)</div>
-                </div>
-                
-                <div class="footer">
-                    <p>شكراً لثقتكم بنا</p>
-                    <p>الهاتف: 0559581957 | البريد: info@redox.com</p>
-                </div>
-                
-                <script>
-                    window.onload = function() {
-                        window.print();
-                        setTimeout(function() {
-                            window.close();
-                        }, 500);
-                    };
-                </script>
-            </body>
-            </html>
-        `);
-        doc.close();
-        
-        iframe.contentWindow.onafterprint = function() {
-            document.body.removeChild(iframe);
-            resolve();
-        };
+                    
+                    <script>
+                        window.onload = function() {
+                            setTimeout(() => {
+                                window.print();
+                                setTimeout(() => {
+                                    window.close();
+                                }, 100);
+                            }, 100);
+                        };
+                    </script>
+                </body>
+                </html>
+            `);
+            doc.close();
+            
+            // حل سريع دون انتظار الطباعة الكاملة
+            setTimeout(() => {
+                document.body.removeChild(iframe);
+                resolve();
+            }, 1000);
+        }, 100);
     });
 }
 
@@ -12902,5 +12915,21 @@ async function recordRegistrationTransaction(studentId, studentName, amount) {
         }
     } catch (err) {
         console.error('Error recording registration transaction:', err);
+    }
+}
+async function apiCallWithTimeout(url, options = {}, timeout = 10000) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    
+    try {
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+        clearTimeout(id);
+        return response;
+    } catch (error) {
+        clearTimeout(id);
+        throw error;
     }
 }
