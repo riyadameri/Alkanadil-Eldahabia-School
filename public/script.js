@@ -588,7 +588,7 @@ async function disconnectFromPrinter() {
 //     month: "يناير 2024",
 //     amount: "6000",
 //     paymentMethod: "cash",
-//     paymentDate: "2024-01-15",
+//     paymentDate: "2024-01-15",08
 //     schoolContact: "الهاتف: 0550123456 | البريد: info@example.com"
 // };
 // 
@@ -12829,66 +12829,263 @@ function initializeMultiEnrollEvents() {
 
 
 
+// دالة لحساب المدخول اليومي
 async function calculateDailyIncome() {
     try {
+        // الحصول على تاريخ اليوم
         const today = new Date().toISOString().split('T')[0];
         
-        // جلب المدفوعات المحصلة لهذا اليوم (حالة paid فقط)
-        const paymentsResponse = await fetch(`/api/payments?date=${today}&status=paid`, {
+        // جلب جميع مدفوعات الحصص ليوم واحد
+        const paymentsResponse = await fetch('/api/payments', {
             headers: getAuthHeaders()
         });
         
-        // جلب رسوم التسجيل المحصلة لهذا اليوم
-        const registrationFeesResponse = await fetch(`/api/accounting/transactions?date=${today}&category=registration`, {
+        // جلب جميع مصاريف التسجيل ليوم واحد
+        const registrationFeesResponse = await fetch('/api/accounting/transactions?type=income&category=registration', {
             headers: getAuthHeaders()
         });
-        
-        // جلب المصاريف المسجلة لهذا اليوم
-        const expensesResponse = await fetch(`/api/accounting/expenses?date=${today}`, {
-            headers: getAuthHeaders()
+
+        if (!paymentsResponse.ok || !registrationFeesResponse.ok) {
+            throw new Error('فشل في جلب بيانات المعاملات');
+        }
+
+        const allPayments = await paymentsResponse.json();
+        const registrationFees = await registrationFeesResponse.json();
+
+        // تصفية مدفوعات الحصص ليوم واحد فقط (اليوم)
+        const todayPayments = allPayments.filter(payment => {
+            const paymentDate = new Date(payment.paymentDate).toISOString().split('T')[0];
+            return paymentDate === today && payment.status === 'paid';
         });
+
+        // تصفية مصاريف التسجيل ليوم واحد فقط (اليوم)
+        const todayRegistrationFees = registrationFees.filter(fee => {
+            const feeDate = new Date(fee.date).toISOString().split('T')[0];
+            return feeDate === today;
+        });
+
+        // إزالة التكرارات من مدفوعات الحصص بناءً على invoiceNumber
+        const uniquePayments = todayPayments.filter((payment, index, self) =>
+            index === self.findIndex(p => p.invoiceNumber === payment.invoiceNumber)
+        );
+
+        // حساب إجمالي الدخل من مدفوعات الحصص
+        const paymentsIncome = uniquePayments.reduce((total, payment) => total + payment.amount, 0);
         
-        let dailyIncome = 0;
-        let dailyExpenses = 0;
-        
-        // حساب الدخل من المدفوعات المحصلة فقط
-        if (paymentsResponse.ok) {
-            const payments = await paymentsResponse.json();
-            dailyIncome = payments.reduce((total, payment) => total + payment.amount, 0);
-        }
-        
-        // إضافة رسوم التسجيل إلى الدخل اليومي
-        if (registrationFeesResponse.ok) {
-            const registrationFees = await registrationFeesResponse.json();
-            const registrationIncome = registrationFees.reduce((total, fee) => total + fee.amount, 0);
-            dailyIncome += registrationIncome;
-        }
-        
-        // حساب المصاريف الفعلية
-        if (expensesResponse.ok) {
-            const expenses = await expensesResponse.json();
-            dailyExpenses = expenses.reduce((total, expense) => total + expense.amount, 0);
-        }
-        
+        // حساب إجمالي الدخل من مصاريف التسجيل
+        const registrationIncome = todayRegistrationFees.reduce((total, fee) => total + fee.amount, 0);
+
+        // إجمالي الدخل اليومي
+        const dailyIncome = paymentsIncome + registrationIncome;
+
+        // إجمالي عدد المعاملات
+        const totalTransactions = uniquePayments.length + todayRegistrationFees.length;
+
         // تحديث واجهة المستخدم
-        document.getElementById('dailyIncome').textContent = `${dailyIncome} د.ج`;
-        document.getElementById('dailyExpenses').textContent = `${dailyExpenses} د.ج`;
+        updateDailyIncomeUI(dailyIncome, totalTransactions, today);
         
-        // تحديث التاريخ
-        const todayFormatted = new Date().toLocaleDateString('ar-EG', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        });
-        
-        document.getElementById('dailyIncomeDate').textContent = todayFormatted;
-        document.getElementById('dailyExpensesDate').textContent = todayFormatted;
+        // إرجاع البيانات المفصلة للإستخدام في أجزاء أخرى من النظام
+        return {
+            income: dailyIncome,
+            count: totalTransactions,
+            payments: {
+                count: uniquePayments.length,
+                amount: paymentsIncome,
+                transactions: uniquePayments
+            },
+            registration: {
+                count: todayRegistrationFees.length,
+                amount: registrationIncome,
+                transactions: todayRegistrationFees
+            }
+        };
         
     } catch (err) {
         console.error('Error calculating daily income:', err);
+        showError('حدث خطأ في حساب المدخول اليومي');
+        return { 
+            income: 0, 
+            count: 0, 
+            payments: { count: 0, amount: 0, transactions: [] },
+            registration: { count: 0, amount: 0, transactions: [] }
+        };
     }
 }
+
+
+// دالة لتحديث واجهة المستخدم
+function updateDailyIncomeUI(income, count, date) {
+    // تحديث العناصر الرئيسية في واجهة المستخدم
+    const incomeElements = [
+        'dailyIncome',
+        'todayIncome',
+        'daily-income-amount'
+    ];
+    
+    incomeElements.forEach(elementId => {
+        const element = document.getElementById(elementId);
+        if (element) {
+            element.textContent = `${income} د.ج`;
+        }
+    });
+    
+    // تحديث عدد المعاملات
+    const countElements = [
+        'dailyTransactionsCount',
+        'todayTransactionsCount'
+    ];
+    
+    countElements.forEach(elementId => {
+        const element = document.getElementById(elementId);
+        if (element) {
+            element.textContent = count;
+        }
+    });
+    
+    // تحديث التاريخ
+    const dateElements = [
+        'dailyIncomeDate',
+        'todayIncomeDate'
+    ];
+    
+    const formattedDate = new Date().toLocaleDateString('ar-EG', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+    
+    dateElements.forEach(elementId => {
+        const element = document.getElementById(elementId);
+        if (element) {
+            element.textContent = formattedDate;
+        }
+    });
+
+    // عرض تفاصيل إضافية إذا كانت متاحة
+    displayIncomeBreakdown(income, count);
+}
+
+
+// دالة لعرض المعاملات اليومية في جدول
+function displayTodayTransactions(transactionsData) {
+    const tableBody = document.getElementById('todayTransactionsTable');
+    if (!tableBody) return;
+    
+    tableBody.innerHTML = '';
+    
+    const allTransactions = [
+        ...transactionsData.payments.transactions.map(t => ({ ...t, type: 'payment' })),
+        ...transactionsData.registration.transactions.map(t => ({ ...t, type: 'registration' }))
+    ];
+
+    if (allTransactions.length === 0) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center py-4 text-muted">
+                    لا توجد معاملات مالية ليوم ${new Date().toLocaleDateString('ar-EG')}
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    // ترتيب المعاملات حسب الوقت (الأحدث أولاً)
+    allTransactions.sort((a, b) => new Date(b.date || b.paymentDate) - new Date(a.date || a.paymentDate));
+    
+    allTransactions.forEach((transaction, index) => {
+        const row = document.createElement('tr');
+        
+        const typeBadge = transaction.type === 'payment' ? 
+            '<span class="badge bg-primary">دفعة حصة</span>' : 
+            '<span class="badge bg-success">مصاريف تسجيل</span>';
+        
+        const description = transaction.type === 'payment' ? 
+            `${transaction.student?.name || 'غير معروف'} - ${transaction.class?.name || 'غير معروف'}` :
+            transaction.description;
+        
+        row.innerHTML = `
+            <td>${index + 1}</td>
+            <td>${description}</td>
+            <td>${transaction.amount} د.ج</td>
+            <td>${typeBadge}</td>
+            <td>${transaction.type === 'payment' ? getPaymentMethodName(transaction.paymentMethod) : 'نقدي'}</td>
+            <td>${new Date(transaction.date || transaction.paymentDate).toLocaleDateString('ar-EG')}</td>
+            <td>
+                <span class="badge bg-secondary">${transaction.reference || transaction.invoiceNumber || 'N/A'}</span>
+            </td>
+        `;
+        tableBody.appendChild(row);
+    });
+}
+
+// دالة لتحديث الداشبورد بالمدخول اليومي
+async function updateDashboardWithDailyIncome() {
+    const todayData = await calculateDailyIncome();
+    
+    // تحديث بطاقة المدخول اليومي في الداشبورد
+    document.getElementById('dailyIncomeCard').innerHTML = `
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">المدخول اليومي</h6>
+                        <h3 class="mb-0">${todayData.income} د.ج</h3>
+                        <small>${todayData.count} معاملة</small>
+                    </div>
+                    <div class="text-end">
+                        <i class="bi bi-currency-exchange display-4 opacity-50"></i>
+                        <div class="mt-2">
+                            <small>${new Date().toLocaleDateString('ar-EG')}</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // عرض المعاملات اليومية
+    displayTodayTransactions(todayData.transactions);
+}
+function displayIncomeBreakdown(totalIncome, totalCount) {
+    const breakdownElement = document.getElementById('incomeBreakdown');
+    if (!breakdownElement) return;
+
+    // في تطبيق حقيقي، يمكنك جلب البيانات المفصلة من calculateDailyIncome()
+    breakdownElement.innerHTML = `
+        <div class="row mt-3">
+            <div class="col-md-6">
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <h6 class="card-title">تفصيل الدخل اليومي</h6>
+                        <p class="mb-1">إجمالي الدخل: <strong>${totalIncome} د.ج</strong></p>
+                        <p class="mb-1">عدد المعاملات: <strong>${totalCount}</strong></p>
+                        <small class="text-muted">يشمل مدفوعات الحصص ومصاريف التسجيل</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+
+// تهيئة حساب المدخول اليومي عند تحميل الصفحة
+document.addEventListener('DOMContentLoaded', function() {
+    calculateDailyIncome();
+    
+    // تحديث المدخول اليومي كل 5 دقائق
+    setInterval(calculateDailyIncome, 5 * 60 * 1000);
+    
+    // تحديث عند فتح قسم المحاسبة
+    document.getElementById('accounting-link').addEventListener('click', function() {
+        calculateDailyIncome();
+    });
+});
+
+// تحديث المدخول اليومي عند تسجيل دفعة جديدة
+socket.on('payment-received', function(data) {
+    calculateDailyIncome();
+});
 
 async function recordRegistrationTransaction(studentId, studentName, amount) {
     try {
@@ -12898,7 +13095,8 @@ async function recordRegistrationTransaction(studentId, studentName, amount) {
             description: `رسوم تسجيل الطالب: ${studentName}`,
             category: 'registration',
             date: new Date().toISOString(),
-            reference: `STU-${studentId}`
+            reference: `REG-${studentId}-${Date.now()}`,
+            studentId: studentId
         };
 
         const response = await fetch('/api/accounting/transactions', {
@@ -12910,13 +13108,18 @@ async function recordRegistrationTransaction(studentId, studentName, amount) {
             body: JSON.stringify(transactionData)
         });
 
-        if (!response.ok) {
+        if (response.ok) {
+            console.log('تم تسجيل معاملة مصاريف التسجيل بنجاح');
+            // تحديث الدخل اليومي فوراً بعد تسجيل المعاملة
+            calculateDailyIncome();
+        } else {
             console.error('Failed to record registration transaction');
         }
     } catch (err) {
         console.error('Error recording registration transaction:', err);
     }
 }
+
 async function apiCallWithTimeout(url, options = {}, timeout = 10000) {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeout);
@@ -12933,3 +13136,4 @@ async function apiCallWithTimeout(url, options = {}, timeout = 10000) {
         throw error;
     }
 }
+

@@ -3043,7 +3043,7 @@ app.put('/api/payments/:id/pay', authenticate(['admin', 'secretary', 'accountant
   }
 });
 
-app.get('/api/payments', authenticate(['admin', 'secretary', 'accountant']), async (req, res) => {
+app.get('/api/payments',  async (req, res) => {
   try {
     const { student, class: classId, month, status } = req.query;
     const query = {};
