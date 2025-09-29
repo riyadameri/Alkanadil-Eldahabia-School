@@ -12259,7 +12259,7 @@ async function loadAccountingData() {
         await calculateDailyIncome();
         
         // تحميل آخر المعاملات
-        const transactionsResponse = await fetch('/api/accounting/transactions?limit=50', {
+        const transactionsResponse = await fetch('/api/accounting/transactions?limit=1000', {
             headers: getAuthHeaders()
         });
         
