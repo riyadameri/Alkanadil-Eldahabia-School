@@ -221,7 +221,7 @@ require('dotenv').config();
     description: String,
     category: { 
         type: String, 
-        enum: ['tuition', 'salary', 'rent', 'utilities', 'supplies', 'other', 'registration'],
+        enum: ['tuition', 'salary', 'rent', 'utilities', 'supplies', 'other', 'registration','refund'],
         required: true 
     },
     date: { type: Date, default: Date.now },
@@ -2870,6 +2870,50 @@ app.get('/api/students/:studentId/monthly-attendance', authenticate(['admin', 's
     }
   });
 
+
+
+  // في ملف الخادم (server.js أو app.js)
+app.put('/api/payments/:id/cancel', authenticate(['admin', 'accountant']), async (req, res) => {
+  try {
+      const payment = await Payment.findById(req.params.id);
+      
+      if (!payment) {
+          return res.status(404).json({ error: 'الدفعة غير موجودة' });
+      }
+
+      if (payment.status !== 'paid') {
+          return res.status(400).json({ error: 'لا يمكن إلغاء دفعة غير مسددة' });
+      }
+
+      // تحديث حالة الدفعة
+      payment.status = 'pending';
+      payment.paymentDate = null;
+      payment.paymentMethod = null;
+      payment.recordedBy = req.user.id;
+      
+      await payment.save();
+
+      // تسجيل معاملة مالية عكسية (إذا كان النظام يحتفظ بسجل للمعاملات)
+      const reverseTransaction = new FinancialTransaction({
+          type: 'expense',
+          amount: payment.amount,
+          description: `إلغاء دفعة - ${payment.student.name} - ${payment.class.name} - ${payment.month}`,
+          category: 'refund',
+          recordedBy: req.user.id,
+          reference: payment._id
+      });
+      await reverseTransaction.save();
+
+      res.json({ 
+          message: 'تم إلغاء الدفعة بنجاح',
+          payment: payment
+      });
+
+  } catch (err) {
+      console.error('Error canceling payment:', err);
+      res.status(500).json({ error: err.message });
+  }
+});
 
 // Payments - Delete a payment
 app.delete('/api/payments/:id', authenticate(['admin', 'accountant']), async (req, res) => {
