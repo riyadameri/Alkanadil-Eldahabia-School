@@ -4211,7 +4211,6 @@ app.put('/api/payments/:id/amount', async (req, res) => {
   });
 
 
-  initializeRFIDReader();
 
   // Main application entry point
   app.get('/', (req, res) => {
@@ -6262,3 +6261,4 @@ process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
   process.exit(1);
 }); 
+

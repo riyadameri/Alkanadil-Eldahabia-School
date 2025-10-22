@@ -3,7 +3,7 @@
     let scheduleCounter = 1;
     const socket = io(window.location.origin); // Connects to current host
 
-
+    
     // Initialize printer variables
     let port, writer;
 
@@ -43,8 +43,21 @@
     }
 
 
-    // Utility function for API calls with error handling
-    async function apiCall(url, options = {}) {
+// Enhanced caching with better management
+const dataCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+async function apiCall(url, options = {}, useCache = true) {
+    const cacheKey = `${url}_${JSON.stringify(options)}`;
+    
+    // Check cache first
+    if (useCache && dataCache.has(cacheKey)) {
+        const cached = dataCache.get(cacheKey);
+        if (Date.now() - cached.timestamp < CACHE_TTL) {
+            return cached.data;
+        }
+    }
+    
     try {
         const response = await fetch(url, {
             headers: {
@@ -55,21 +68,42 @@
             ...options
         });
 
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
-        return await response.json();
+        const data = await response.json();
+        
+        // Cache the response
+        if (useCache) {
+            dataCache.set(cacheKey, {
+                data: data,
+                timestamp: Date.now()
+            });
+        }
+        
+        return data;
     } catch (error) {
         console.error('API call failed:', error);
-        showError(`Failed to load data: ${error.message}`);
         throw error;
     }
+}
+
+// Clear cache when needed
+function clearCache() {
+    dataCache.clear();
+}
+
+function invalidateCache(patterns = []) {
+    if (patterns.length === 0) {
+        dataCache.clear();
+        return;
     }
-
-    // Usage example for counting students
-
-
+    
+    for (const key of dataCache.keys()) {
+        if (patterns.some(pattern => key.includes(pattern))) {
+            dataCache.delete(key);
+        }
+    }
+}
 
     // Print text to the thermal printer
     async function printTextToPrinter(text) {
@@ -721,7 +755,6 @@
                 await port.close();
                 writer = null;
                 port = null;
-                console.log("Printer disconnected");
             } catch (err) {
                 console.error("Error disconnecting printer:", err);
             }
@@ -1355,7 +1388,6 @@
     // Function to process RFID input
     // Function to process RFID input
     async function processRFIDInput(rfidCode) {
-        console.log('Processing RFID:', rfidCode);
         
         // Show connection status
         const rfidStatus = document.getElementById('rfidStatus');
@@ -1560,16 +1592,58 @@
 
 
     // دالة للتحميل المتقطع للبيانات
-    function debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
+function debounce(func, wait, immediate = false) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            timeout = null;
+            if (!immediate) func(...args);
         };
+        const callNow = immediate && !timeout;
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+        if (callNow) func(...args);
+    };
+}
+
+
+    
+
+
+    async function loadStudentsLazy(reset = false) {
+        if (reset) {
+            studentsPage = 1;
+            document.getElementById('studentsTable').innerHTML = '';
+        }
+        
+        try {
+            const students = await apiCall(`/api/students?page=${studentsPage}&limit=${studentsPerPage}`);
+            
+            if (students.length > 0) {
+                updateStudentsTable(students, reset);
+                studentsPage++;
+            }
+            
+            return students.length === studentsPerPage; // Return true if more data exists
+        } catch (err) {
+            console.error('Error loading students:', err);
+            return false;
+        }
+    }
+    
+    // Infinite scroll implementation
+    function setupInfiniteScroll() {
+        const tableContainer = document.querySelector('.table-container');
+        if (tableContainer) {
+            tableContainer.addEventListener('scroll', debounce(async function() {
+                if (this.scrollTop + this.clientHeight >= this.scrollHeight - 100) {
+                    const hasMore = await loadStudentsLazy();
+                    if (!hasMore) {
+                        // Remove scroll listener or show "no more data" message
+                    }
+                }
+            }, 200));
+        }
     }
 
     // تحسين تحميل الطلاب
@@ -3071,7 +3145,6 @@ async function refreshDataAfterCancellation(paymentId) {
         };
         
         try {
-            console.log('Academic Year:', document.getElementById('classAcademicYear').value);
             
             const response = await fetch('/api/classes', {
                 method: 'POST',
@@ -5846,7 +5919,6 @@ async function refreshDataAfterCancellation(paymentId) {
                     for (const liveClass of ongoingClasses) {
                         if (liveClass.endTime && checkIfClassEnded(liveClass.endTime)) {
                             // الحصة انتهت - تسجيل الغائبين
-                            console.log('الحصة انتهت تلقائياً:', liveClass.class.name);
                             await autoMarkAbsentOnClassEnd(liveClass._id);
                             
                             // تحديث حالة الحصة إلى منتهية
@@ -8014,7 +8086,6 @@ async function refreshDataAfterCancellation(paymentId) {
     const confirmPassword = document.getElementById('accountConfirmPassword').value;
     const email = document.getElementById('accountEmail').value.trim();
 
-    console.log(studentId, username, password, confirmPassword, email);
 
 
     // Validation
@@ -8078,7 +8149,6 @@ async function refreshDataAfterCancellation(paymentId) {
         ]
         });
         
-        console.log('Device selected:', device);
         
         // Open the device
         await device.open();
@@ -8147,7 +8217,6 @@ async function refreshDataAfterCancellation(paymentId) {
         await rfidDevice.releaseInterface(0);
         await rfidDevice.close();
         rfidDevice = null;
-        console.log('RFID reader disconnected');
         } catch (error) {
         console.error('Error disconnecting:', error);
         }
@@ -8841,7 +8910,6 @@ async function refreshDataAfterCancellation(paymentId) {
     function updateClassesTable(classes) {
         const tableBody = document.getElementById('classesTable');
         if (!tableBody) {
-            console.log('جدول الحصص غير موجود في الصفحة الحالية');
             return;
         }
         
@@ -9015,7 +9083,6 @@ async function refreshDataAfterCancellation(paymentId) {
 
             // إذا لم توجد العناصر، توقف عن التنفيذ
             if (!studentsCountElem || !teachersCountElem || !classesCountElem || !paymentsCountElem) {
-                console.log('عناصر العدادات غير موجودة في الصفحة الحالية');
                 return;
             }
 
@@ -9061,7 +9128,6 @@ async function refreshDataAfterCancellation(paymentId) {
 
     function loadSectionData(sectionId) {
         // In a real app, this would fetch data from the server
-        console.log(`Loading data for ${sectionId} section`);
         
         switch(sectionId) {
         case 'dashboard':
@@ -9282,7 +9348,6 @@ async function refreshDataAfterCancellation(paymentId) {
                 const uid = this.value.trim();
                 if (uid.length >= 8) {
                     // Just populate the field, don't process automatically
-                    console.log('Card scanned for assignment:', uid);
                 }
             });
         }
@@ -9336,7 +9401,6 @@ async function refreshDataAfterCancellation(paymentId) {
 
     async function handleRFIDScan(uid) {
         try {
-            console.log('Processing RFID scan:', uid);
             
             // Show loading state
             const rfidResult = document.getElementById('rfid-result') || 
@@ -9358,7 +9422,6 @@ async function refreshDataAfterCancellation(paymentId) {
                 headers: getAuthHeaders()
             });
 
-            console.log('Card lookup response status:', response.status);
 
             if (response.status === 404) {
                 // Unknown card
@@ -9382,7 +9445,6 @@ async function refreshDataAfterCancellation(paymentId) {
             }
 
             const cardData = await response.json();
-            console.log('Card data:', cardData);
             
             if (cardData.student) {
                 // Show student info
@@ -9428,18 +9490,15 @@ async function refreshDataAfterCancellation(paymentId) {
     // Add this function to debug card issues
     async function debugCard(uid) {
         try {
-            console.log('Debugging card:', uid);
             
             // Check if card exists
             const cardResponse = await fetch(`/api/cards/uid/${uid}`, {
                 headers: getAuthHeaders()
             });
             
-            console.log('Card response:', cardResponse.status);
             
             if (cardResponse.ok) {
                 const cardData = await cardResponse.json();
-                console.log('Card data:', cardData);
                 
                 if (cardData.student) {
                     // Check student details
@@ -9449,7 +9508,6 @@ async function refreshDataAfterCancellation(paymentId) {
                     
                     if (studentResponse.ok) {
                         const student = await studentResponse.json();
-                        console.log('Student data:', student);
                     }
                 }
             }
@@ -9574,7 +9632,6 @@ async function refreshDataAfterCancellation(paymentId) {
 
     async function handleGateAttendance(uid) {
         try {
-            console.log('Processing gate attendance for card:', uid);
             
             // الحصول على معلومات البطاقة
             const cardResponse = await fetch(`/api/cards/uid/${uid}`, {
@@ -9704,7 +9761,6 @@ async function refreshDataAfterCancellation(paymentId) {
 
             if (response.ok) {
                 const result = await response.json();
-                console.log('تم تسجيل الغائبين تلقائياً:', result);
                 
                 // إشعار المدير/الأستاذ
                 if (result.absentCount > 0) {
@@ -9719,7 +9775,6 @@ async function refreshDataAfterCancellation(paymentId) {
     // دالة للإشعار بالغائبين
     function notifyAbsentStudents(absentCount, className) {
         // يمكن تطوير هذه الدالة لإرسال إشعارات عبر البريد أو الرسائل
-        console.log(`هناك ${absentCount} طالب غائب عن حصة ${className}`);
         
         // عرض إشعار للمستخدم
         if (absentCount > 0) {
@@ -12013,14 +12068,12 @@ async function refreshDataAfterCancellation(paymentId) {
         }).then((result) => {
             if (result.isConfirmed) {
                 // تنفيذ التسجيل اليدوي هنا
-                console.log('Manual attendance:', result.value);
             }
         });
     }
 
     async function debugAttendance(studentId, classId) {
         try {
-            console.log('Debugging attendance for:', studentId, classId);
             
             // التحقق من الحضور الحالي
             const response = await fetch(`/api/attendance/check?student=${studentId}&class=${classId}&date=${new Date().toISOString().split('T')[0]}`, {
@@ -12029,10 +12082,8 @@ async function refreshDataAfterCancellation(paymentId) {
             
             if (response.ok) {
                 const attendanceData = await response.json();
-                console.log('Attendance status:', attendanceData);
                 
                 if (attendanceData.exists) {
-                    console.log('الحضور مسجل مسبقاً:', attendanceData);
                     return true;
                 }
             }
@@ -12907,7 +12958,6 @@ async function refreshDataAfterCancellation(paymentId) {
 
     // دالة تأكيد التسجيل في الحصص المتعددة
     async function confirmMultiEnrollment() {
-        console.log('تم النقر على زر التأكيد'); // للتأكد من أن الحدث يعمل
         
         const selectedCheckboxes = document.querySelectorAll('.class-checkbox:checked');
         const selectedClasses = Array.from(selectedCheckboxes).map(checkbox => checkbox.value);
@@ -13388,7 +13438,6 @@ async function refreshDataAfterCancellation(paymentId) {
             });
 
             if (response.ok) {
-                console.log('تم تسجيل معاملة مصاريف التسجيل بنجاح');
                 // تحديث الدخل اليومي فوراً بعد تسجيل المعاملة
                 calculateDailyIncome();
             } else {
