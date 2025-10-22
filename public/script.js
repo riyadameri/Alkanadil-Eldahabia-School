@@ -196,7 +196,7 @@ function invalidateCache(patterns = []) {
                             ctx.fillStyle = "#000000";
                             ctx.textAlign = "center";
                             ctx.font = "bold 28px Arial";
-                            ctx.fillText("أكاديمية الرواد", canvas.width/2, 50);
+                            ctx.fillText("القناديل سكول", canvas.width/2, 50);
                             ctx.font = "bold 22px Arial";
                             ctx.fillText("للتعليم والمعارف", canvas.width/2, 80);
                         }
@@ -4460,7 +4460,7 @@ async function refreshDataAfterCancellation(paymentId) {
                     </style>
                 </head>
                 <body>
-                    <div class="watermark">${classObj.school?.name || 'أكاديمية الرواد'}</div>
+                    <div class="watermark">${classObj.school?.name || 'القناديل سكول'}</div>
                     
                     <div class="container">
                         <div class="header">
@@ -4561,7 +4561,7 @@ async function refreshDataAfterCancellation(paymentId) {
                                 
                                 <div style="text-align: center;">
                                     <div style="margin-bottom: 10px;">
-                                        <strong>إدارة أكاديمية الرواد</strong>
+                                        <strong>إدارة القناديل سكول</strong>
                                     </div>
                                     <div style="font-size: 12px; color: #666;">
                                         الهاتف: 0559581957 | البريد: info@redox.com
@@ -9014,7 +9014,7 @@ async function refreshDataAfterCancellation(paymentId) {
                     <body>
                         <div class="receipt-header">
                             <div class="receipt-title">إيصال تسجيل طالب</div>
-                            <div>أكاديمية الرواد</div>
+                            <div>القناديل سكول</div>
                         </div>
                         
                         <div class="detail-row">
