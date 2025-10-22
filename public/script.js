@@ -164,7 +164,7 @@ function invalidateCache(patterns = []) {
                 redoxLogo.onerror = checkAllImagesLoaded;
                 
                 // Set image sources
-                logoImg.src = 'assets/rouad.JPG';
+                logoImg.src = 'assets/9anadil.jpg';
                 redoxLogo.src = 'assets/redox-icon.png';
                 
                 // If images take too long, start drawing anyway
@@ -483,7 +483,7 @@ function invalidateCache(patterns = []) {
             receipt += '\x1B\x61\x01'; // Center alignment
             
             // Header
-            receipt += "أكاديمية الرواد للتعليم والمعارف\n";
+            receipt += "القناديل الدهبية سكول\n";
             receipt += "إيصال دفع شهري\n";
             receipt += "─────────────────────\n";
             
@@ -4465,13 +4465,13 @@ async function refreshDataAfterCancellation(paymentId) {
                     <div class="container">
                         <div class="header">
                             <div class="school-info">
-                                <div class="school-name">${classObj.school?.name || 'أكاديمية الرواد للتعليم والمعارف'}</div>
+                                <div class="school-name">${classObj.school?.name || 'القناديل الدهبية سكول'}</div>
                                 <div class="school-subtitle">مؤسسة تعليمية متخصصة في تقديم أفضل البرامج التعليمية</div>
                                 <div class="document-title">القائمة الاسمية للطلاب</div>
                             </div>
                             
                             <div class="logo-container">
-                                <img src="assets/rouad.JPG" alt="شعار المدرسة" class="school-logo" 
+                                <img src="assets/9anadil.jpg" alt="شعار المدرسة" class="school-logo" 
                                     onerror="this.style.display='none'; this.parentNode.innerHTML='<div style=\\'text-align:center; padding:20px;\\'><strong>شعار المدرسة</strong></div>';">
                             </div>
                         </div>
@@ -10267,14 +10267,14 @@ async function refreshDataAfterCancellation(paymentId) {
             // If image fails to load, continue without it
             drawReceiptContent();
         };
-        logoImg.src = 'assets/rouad.JPG';
+        logoImg.src = 'assets/9anadil.jpg';
         
         function drawReceiptContent() {
             // Main title with larger font
             ctx.fillStyle = "#000000";
             ctx.textAlign = "center";
             ctx.font = "bold 32px Arial";
-            ctx.fillText("أكاديمية الرواد للتعليم والمعارف", canvas.width / 2, 50);
+            ctx.fillText("القناديل الدهبية سكول", canvas.width / 2, 50);
             
             ctx.font = "bold 24px Arial";
             ctx.fillText("إيصال دفع متعدد الحصص", canvas.width / 2, 90);
@@ -12332,7 +12332,7 @@ async function refreshDataAfterCancellation(paymentId) {
                     <div class="page">
                         <div class="header">
                             <div class="header-left">
-                                <img src="assets/rouad.JPG" alt="شعار المدرسة" class="school-logo">
+                                <img src="assets/9anadil.jpg" alt="شعار المدرسة" class="school-logo">
                                 <div class="school-info">
                                     <div class="school-name">${liveClass.class.school?.name || 'أكادمية الرواد للتعليم و المعارف'}</div>
                                     <div class="document-title">كشف الحضور والغياب</div>
