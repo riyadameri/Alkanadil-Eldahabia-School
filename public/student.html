@@ -783,7 +783,7 @@
                     loginError.value = '';
                     
                     try {
-                        const response = await axios.post('http://localhost:4200/api/student/login', loginForm.value);
+                        const response = await axios.post('/api/student/login', loginForm.value);
                         token.value = response.data.token;
                         localStorage.setItem('studentToken', token.value);
                         
@@ -804,7 +804,7 @@
                     registrationSuccess.value = '';
                     
                     try {
-                        const response = await axios.post('http://localhost:4200/api/student/register', registrationForm.value);
+                        const response = await axios.post('/api/student/register', registrationForm.value);
                         registrationSuccess.value = 'تم استلام طلب التسجيل بنجاح. سيتم التواصل معك بعد مراجعة البيانات.';
                         
                         // Clear form
@@ -841,7 +841,7 @@
 
                 const fetchStudentData = async () => {
                     try {
-                        const response = await axios.get('http://localhost:4200/api/student/data', {
+                        const response = await axios.get('/api/student/data', {
                             headers: {
                                 'Authorization': `Bearer ${token.value}`
                             }
@@ -902,7 +902,7 @@
 
                 const fetchAttendanceRecords = async () => {
                     try {
-                        const response = await axios.get('http://localhost:4200/api/attendance', {
+                        const response = await axios.get('/api/attendance', {
                             params: {
                                 student: studentData.value._id
                             },
