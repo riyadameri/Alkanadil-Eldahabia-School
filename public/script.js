@@ -9632,57 +9632,85 @@ async function refreshDataAfterCancellation(paymentId) {
 
     async function handleGateAttendance(uid) {
         try {
-            
             // الحصول على معلومات البطاقة
             const cardResponse = await fetch(`/api/cards/uid/${uid}`, {
                 headers: getAuthHeaders()
             });
-
+    
             if (cardResponse.status === 404) {
                 throw new Error('البطاقة غير معروفة');
             }
-
+    
             if (cardResponse.status === 401) {
                 logout();
                 return;
             }
-
+    
             const cardData = await cardResponse.json();
             
             if (!cardData.student) {
                 throw new Error('البطاقة غير مرتبطة بأي طالب');
             }
-
-            // البحث عن الحصص الجارية
+    
+            // البحث عن جميع الحصص الجارية
             const now = new Date();
             const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             
             const classesResponse = await fetch(`/api/live-classes?status=ongoing&date=${today.toISOString()}`, {
                 headers: getAuthHeaders()
             });
-
+    
             if (classesResponse.status === 401) {
                 logout();
                 return;
             }
-
+    
             const liveClasses = await classesResponse.json();
             
             if (liveClasses.length === 0) {
                 await handleNoOngoingClasses(cardData.student._id);
                 return;
             }
-
-            const liveClass = liveClasses[0];
+    
+            // البحث عن الحصة التي يكون الطالب مسجلاً فيها
+            let targetClass = null;
             
+            for (const liveClass of liveClasses) {
+                // التحقق مما إذا كان الطالب مسجلاً في هذه الحصة
+                const classResponse = await fetch(`/api/classes/${liveClass.class._id}`, {
+                    headers: getAuthHeaders()
+                });
+                
+                if (classResponse.ok) {
+                    const classData = await classResponse.json();
+                    const isEnrolled = classData.students.some(student => 
+                        student._id === cardData.student._id || student === cardData.student._id
+                    );
+                    
+                    if (isEnrolled) {
+                        targetClass = liveClass;
+                        break;
+                    }
+                }
+            }
+    
+            if (!targetClass) {
+                // الطالب غير مسجل في أي حصة جارية
+                showGateResult('not_enrolled', {
+                    student: cardData.student,
+                    availableClasses: liveClasses.map(cls => cls.class.name)
+                });
+                return;
+            }
+    
             // تحديد حالة الحضور (حاضر/متأخر)
             let attendanceStatus = 'present';
-            if (checkIfLate(liveClass.startTime, 30)) {
+            if (checkIfLate(targetClass.startTime, 30)) {
                 attendanceStatus = 'late';
             }
-
+    
             // تسجيل الحضور
-            const attendanceResponse = await fetch(`/api/live-classes/${liveClass._id}/attendance`, {
+            const attendanceResponse = await fetch(`/api/live-classes/${targetClass._id}/attendance`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -9695,9 +9723,9 @@ async function refreshDataAfterCancellation(paymentId) {
                     late: attendanceStatus === 'late'
                 })
             });
-
+    
             const responseData = await attendanceResponse.json();
-
+    
             if (attendanceResponse.ok) {
                 // عرض رسالة النجاح
                 const statusMessage = attendanceStatus === 'late' ? 
@@ -9713,7 +9741,7 @@ async function refreshDataAfterCancellation(paymentId) {
                         <div class="alert alert-${statusClass} text-center">
                             <h4>${statusMessage}</h4>
                             <p>الطالب: ${cardData.student.name}</p>
-                            <p>الحصة: ${liveClass.class.name}</p>
+                            <p>الحصة: ${targetClass.class.name}</p>
                             <p>الحالة: ${attendanceStatus === 'late' ? 'متأخر' : 'حاضر'}</p>
                             <p>الوقت: ${new Date().toLocaleTimeString('ar-EG')}</p>
                         </div>
@@ -9726,7 +9754,7 @@ async function refreshDataAfterCancellation(paymentId) {
                 // إضافة إلى السجلات الحديثة
                 addToRecentScans('student', {
                     student: cardData.student,
-                    class: liveClass.class,
+                    class: targetClass.class,
                     status: attendanceStatus,
                     timestamp: new Date().toISOString()
                 });
@@ -11424,43 +11452,75 @@ async function refreshDataAfterCancellation(paymentId) {
             const cardResponse = await fetch(`/api/cards/uid/${cardUid}`, {
                 headers: getAuthHeaders()
             });
-
+    
             if (cardResponse.status !== 200) {
                 throw new Error('البطاقة غير معروفة');
             }
-
+    
             const cardData = await cardResponse.json();
             
             if (!cardData.student) {
                 throw new Error('البطاقة غير مرتبطة بأي طالب');
             }
-
-            // البحث عن الحصص الجارية
+    
+            // البحث عن جميع الحصص الجارية
             const now = new Date();
             const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             
             const classesResponse = await fetch(`/api/live-classes?status=ongoing&date=${today.toISOString()}`, {
                 headers: getAuthHeaders()
             });
-
+    
             if (classesResponse.status === 401) {
                 logout();
                 return;
             }
-
+    
             const liveClasses = await classesResponse.json();
             
             if (liveClasses.length === 0) {
-                // إذا لم توجد حصص جارية، اعرض خيارات للحصص المجدولة
                 await handleNoOngoingClasses(cardData.student._id);
                 return;
             }
-
-            // استخدام أول حصة جارية
-            const liveClass = liveClasses[0];
+    
+            // البحث عن الحصة التي يكون الطالب مسجلاً فيها
+            let targetClass = null;
             
+            for (const liveClass of liveClasses) {
+                const classResponse = await fetch(`/api/classes/${liveClass.class._id}`, {
+                    headers: getAuthHeaders()
+                });
+                
+                if (classResponse.ok) {
+                    const classData = await classResponse.json();
+                    const isEnrolled = classData.students.some(student => 
+                        student._id === cardData.student._id || student === cardData.student._id
+                    );
+                    
+                    if (isEnrolled) {
+                        targetClass = liveClass;
+                        break;
+                    }
+                }
+            }
+    
+            if (!targetClass) {
+                // عرض رسالة أن الطالب غير مسجل في أي حصة جارية
+                const rfidResult = document.getElementById('global-rfid-result');
+                rfidResult.innerHTML = `
+                    <div class="alert alert-warning">
+                        <h6>الطالب غير مسجل</h6>
+                        <p>${cardData.student.name} غير مسجل في أي حصة جارية حالياً</p>
+                        <button class="btn btn-sm btn-primary mt-2" onclick="showEnrollStudentModal('${cardData.student._id}')">
+                            التسجيل في حصة
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+    
             // تسجيل الحضور
-            const attendanceResponse = await fetch(`/api/live-classes/${liveClass._id}/attendance`, {
+            const attendanceResponse = await fetch(`/api/live-classes/${targetClass._id}/attendance`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -11472,7 +11532,7 @@ async function refreshDataAfterCancellation(paymentId) {
                     method: 'rfid'
                 })
             });
-
+    
             if (attendanceResponse.ok) {
                 const result = await attendanceResponse.json();
                 
@@ -11482,7 +11542,7 @@ async function refreshDataAfterCancellation(paymentId) {
                     <div class="alert alert-success">
                         <h6>تم تسجيل الحضور</h6>
                         <p>الطالب: ${cardData.student.name}</p>
-                        <p>الحصة: ${liveClass.class.name}</p>
+                        <p>الحصة: ${targetClass.class.name}</p>
                         <p>الوقت: ${new Date().toLocaleTimeString('ar-EG')}</p>
                     </div>
                 `;
